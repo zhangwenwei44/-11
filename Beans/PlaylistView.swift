@@ -13,6 +13,7 @@ struct PlaylistView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var theme: ThemeStore
     @ObservedObject private var favorites = FavoritesStore.shared
+    @ObservedObject private var playlistFavorites = PlaylistFavoritesStore.shared
 
     let playlist: Playlist
     @State private var tracks: [Song] = []
@@ -120,6 +121,24 @@ struct PlaylistView: View {
                         player.play(songs: displayedTracks, startAt: Int.random(in: 0..<displayedTracks.count))
                     }
                 }
+                // 收藏按钮紧随随机播放之后（紧凑圆形，避免三个宽按钮挤出屏幕）
+                let isFavorited = playlistFavorites.contains(playlist)
+                Button {
+                    BeansHaptics.tap()
+                    var target = playlist
+                    if tracks.count > target.trackCount {
+                        target.trackCount = tracks.count
+                    }
+                    playlistFavorites.toggle(target)
+                } label: {
+                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(isFavorited ? Color(red: 0.95, green: 0.30, blue: 0.32) : Color.beansLabel)
+                        .frame(width: 44, height: 44)
+                        .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                }
+                .buttonStyle(GlassPressButtonStyle())
+                .accessibilityLabel(isFavorited ? "取消收藏" : "收藏歌单")
             }
             if tracks.count > 1 {
                 HStack {
@@ -237,6 +256,8 @@ struct PlaylistView: View {
             if !tracks.isEmpty {
                 cache.saveSongs(tracks, playlist: playlist, accountID: cacheAccountID)
             }
+            // 收藏的歌单：用真实曲目数回写，修复收藏列表歌曲数显示 0。
+            playlistFavorites.updateTrackCount(id: playlist.id, source: playlist.source, count: tracks.count)
             BeansLogger.shared.log("歌单页面加载完成 source=\(playlist.source.rawValue) id=\(playlist.id) name=\(playlist.name) count=\(tracks.count) error=无", level: tracks.isEmpty ? .warn : .info)
             loading = false
         } catch {

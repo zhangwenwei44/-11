@@ -408,7 +408,7 @@ struct Playlist: Identifiable, Hashable, Codable {
     let id: Int
     let name: String
     var coverURL: URL?
-    let trackCount: Int
+    var trackCount: Int
     let playCount: Int
     let creatorName: String
     let creatorAvatarURL: URL?

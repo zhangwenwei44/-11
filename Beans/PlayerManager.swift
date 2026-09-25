@@ -1388,7 +1388,9 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 这样会优先遵循用户的官方/第三方播放来源设置；只接受标题、歌手和时长均匹配的结果，避免播放到翻唱或不同版本。
     @discardableResult
     private func attemptCrossPlatformFallbackIfNeeded(for song: Song, reason: String) -> Bool {
-        let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? true
+        // 默认不再跨平台查找同名歌曲：解析失败直接自动跳下一首，
+        // 避免先去其它平台搜索拖慢切换（可在 UserDefaults 打开 beans.playback.autoCrossPlatformFallback 恢复）。
+        let enabled = defaults.object(forKey: Self.autoCrossPlatformFallbackKey) as? Bool ?? false
         guard enabled,
               crossPlatformFallbackInFlightSongKey != song.identityKey else { return false }
 

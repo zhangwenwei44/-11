@@ -2284,7 +2284,16 @@ final class KugouMusicAPI {
         let name = string(raw["name"] ?? raw["listname"] ?? raw["list_name"] ?? raw["specialname"] ?? raw["title"])
         let cover = string(raw["pic"] ?? raw["img"] ?? raw["cover"] ?? raw["sizable_cover"] ?? raw["list_pic"] ?? raw["imgurl"] ?? raw["picurl"])
             .replacingOccurrences(of: "{size}", with: "400")
-        let count = int(raw["count"] ?? raw["song_count"] ?? raw["total"] ?? raw["file_count"] ?? raw["songcount"] ?? raw["song_num"])
+        var count = int(raw["count"] ?? raw["song_count"] ?? raw["total"] ?? raw["file_count"] ?? raw["songcount"] ?? raw["song_num"])
+        if count == 0 {
+            // 接口未直接返回歌曲数时，用随歌单返回的歌曲列表长度兜底，避免列表显示 0 首。
+            for key in ["songs", "songlist", "song_list", "list"] {
+                if let songs = raw[key] as? [Any], !songs.isEmpty {
+                    count = songs.count
+                    break
+                }
+            }
+        }
         let creator = raw["creator"] as? [String: Any] ?? raw["author"] as? [String: Any] ?? [:]
         let creatorName = string(raw["creator_name"] ?? raw["username"] ?? raw["nickname"] ?? raw["author_name"] ?? raw["author"])
             .isEmpty ? string(creator["name"] ?? creator["nickname"] ?? creator["username"]) : string(raw["creator_name"] ?? raw["username"] ?? raw["nickname"] ?? raw["author_name"] ?? raw["author"])

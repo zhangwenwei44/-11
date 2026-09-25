@@ -52,6 +52,7 @@ jobs:
         run: xcodegen generate
 
       - name: Build (unsigned)
+        shell: bash
         run: |
           VER=$(cat version.txt)
           BUILD=$(cat build.txt)
@@ -74,9 +75,18 @@ jobs:
 
       - name: Commit build errors on failure
         if: failure()
+        shell: bash
         run: |
           mkdir -p ci-logs
-          grep -E "error:|fatal error|The following build commands failed|BUILD FAILED|xcodebuild: error" xcodebuild.log > ci-logs/xcodebuild-errors.log || cp xcodebuild.log ci-logs/xcodebuild-errors.log
+          : > ci-logs/xcodebuild-errors.log
+          for f in xcodebuild.log package.log; do
+            [ -f "$f" ] || continue
+            echo "===== $f =====" >> ci-logs/xcodebuild-errors.log
+            grep -E "error:|fatal|No such file|BUILD FAILED|xcodebuild: error|Errors" "$f" >> ci-logs/xcodebuild-errors.log || true
+            echo "----- tail of $f -----" >> ci-logs/xcodebuild-errors.log
+            tail -n 60 "$f" >> ci-logs/xcodebuild-errors.log || true
+          done
+          [ -s ci-logs/xcodebuild-errors.log ] || echo "no logs captured" > ci-logs/xcodebuild-errors.log
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f ci-logs/xcodebuild-errors.log
@@ -91,7 +101,9 @@ jobs:
           plutil -p build/Build/Products/Release-iphoneos/Beans.app/Info.plist | grep -E "CFBundleShortVersionString|CFBundleVersion"
 
       - name: Package IPA
+        shell: bash
         run: |
+          exec > >(tee package.log) 2>&1
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/Beans.app Payload/
           # 使用普通 ZIP，避免将 macOS 资源元数据带入 IPA，提升第三方签名器兼容性。

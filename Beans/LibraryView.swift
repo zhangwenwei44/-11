@@ -1,0 +1,755 @@
+import SwiftUI
+
+private enum LibraryRoute: Hashable {
+    case playlist(Playlist)
+}
+
+enum LibraryProvider: String, CaseIterable, Identifiable {
+    case netease = "网易云音乐"
+    case qq = "QQ音乐"
+    case kugou = "酷狗音乐"
+
+    var id: String { rawValue }
+
+    var tint: LinearGradient {
+        switch self {
+        case .netease:
+            return LinearGradient(colors: [Color(red: 0.93, green: 0.22, blue: 0.16), Color(red: 0.80, green: 0.15, blue: 0.12)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .qq:
+            return LinearGradient(colors: [Color(red: 0.15, green: 0.78, blue: 0.55), Color(red: 0.05, green: 0.58, blue: 0.42)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        case .kugou:
+            return LinearGradient(colors: [Color(red: 0.12, green: 0.58, blue: 0.95), Color(red: 0.02, green: 0.32, blue: 0.72)], startPoint: .topLeading, endPoint: .bottomTrailing)
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .netease: return "cloud.fill"
+        case .qq: return "play.rectangle.fill"
+        case .kugou: return "music.note"
+        }
+    }
+
+    var brandImageName: String? {
+        switch self {
+        case .netease: return "BrandNetease"
+        case .qq: return "BrandQQ"
+        case .kugou: return "BrandKugou"
+        }
+    }
+}
+
+private extension LibraryProvider {
+    var songSource: SongSource {
+        switch self {
+        case .netease: return .netease
+        case .qq: return .qq
+        case .kugou: return .kugou
+        }
+    }
+}
+
+struct LibraryView: View {
+    @EnvironmentObject private var theme: ThemeStore
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var player: PlayerManager
+    @EnvironmentObject private var favorites: FavoritesStore
+    @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
+    @ObservedObject private var kugouAuth = KugouMusicAuth.shared
+    @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+
+    @State private var showHistory = false
+    @State private var showLibraryPlatformMenu = false
+    @State private var showProfile = false
+    @State private var showSectionSort = false
+    @State private var showSyncedPlaylistSort = false
+    /// 音乐库板块顺序（本地音乐库 / 我的歌单 / 最近播放，可自定义）
+    @State private var libraryOrder = SectionOrderStore.load(SectionOrderStore.libraryKey, defaults: SectionOrderStore.libraryDefaults)
+    @State private var navigationPath: [LibraryRoute] = []
+    @State private var legacyRoute: LibraryRoute?
+    @State private var showCreatePlaylist = false
+    @State private var newPlaylistName = ""
+    @State private var pendingDelete: Playlist?
+    @State private var showDeleteConfirm = false
+    @State private var source: LibraryProvider = .kugou
+    @AppStorage("beans.homeHeaderHideSort") private var hideSortButton = false
+    @AppStorage(PlatformPreferenceStore.hidePickerKey) private var hidePlatformPicker = false
+    @State private var qqPlaylists: [Playlist] = []
+    @State private var qqLoading = false
+    @State private var qqSavedAt = Date.distantPast
+    @State private var kugouPlaylists: [Playlist] = []
+    @State private var kugouLoading = false
+    @State private var kugouSavedAt = Date.distantPast
+    @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
+    private var libraryProviders: [LibraryProvider] { platformPrefs.enabledLibraryProviders }
+
+    private var orderedNeteasePlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(auth.playlists, source: .netease)
+    }
+
+    private var orderedQQPlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(qqPlaylists, source: .qq)
+    }
+
+    private var orderedKugouPlaylists: [Playlist] {
+        SyncedPlaylistOrderStore.shared.ordered(kugouPlaylists, source: .kugou)
+    }
+
+    private var qqCacheAccountID: String {
+        ""
+    }
+
+    private var kugouCacheAccountID: String {
+        kugouAuth.userId
+    }
+
+    private var syncedPlaylistBinding: Binding<[Playlist]> {
+        Binding(
+            get: {
+                switch source {
+                case .netease: return orderedNeteasePlaylists
+                case .qq: return orderedQQPlaylists
+                case .kugou: return orderedKugouPlaylists
+                }
+            },
+            set: { value in
+                switch source {
+                case .netease: auth.playlists = value
+                case .qq: qqPlaylists = value
+                case .kugou: kugouPlaylists = value
+                }
+                SyncedPlaylistOrderStore.shared.save(value, source: source.songSource)
+            }
+        )
+    }
+
+    private var isNativeClean: Bool {
+        BeansUIStyle(rawValue: uiStyleRaw) == .nativeClean
+    }
+
+    var body: some View {
+        let _ = theme.accent
+        BeansNavigationStackWithPath(path: $navigationPath) {
+        ZStack {
+            if !usesSharedRootBackdrop {
+                // 页面背景：同步开启时显示壁纸/背景色，否则默认氛围渐变
+                GlassBackdrop(customColor: theme.backgroundSyncAll ? theme.customBackground : nil)
+            }
+            // 实例级 UITabBar 清透风格（固定全透明，无需调节）
+            TabBarAppearanceConfigurator()
+            if #unavailable(iOS 16.0) {
+                NavigationLink(
+                    destination: libraryDestination(legacyRoute ?? .playlist(Playlist(id: 0, name: "", coverURL: nil))),
+                    isActive: Binding(
+                        get: { legacyRoute != nil },
+                        set: { if !$0 { legacyRoute = nil } }
+                    )
+                ) {
+                    EmptyView()
+                }
+                .hidden()
+            }
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: isNativeClean ? 30 : 24) {
+                if isNativeClean {
+                        appleHeader
+                    } else {
+                        header
+                    }
+                    // 板块按用户自定义顺序渲染（可拖拽排序）
+                    ForEach(libraryOrder, id: \.self) { key in
+                        switch key {
+                        case "本地音乐库":
+                            LocalMusicSection()
+                        case "我的歌单":
+                            switch source {
+                            case .netease: playlistsSection
+                            case .qq: qqSection
+                            case .kugou: kugouSection
+                            }
+                        case "最近播放":
+                            historySection
+                        default:
+                            EmptyView()
+                        }
+                    }
+                }
+                .padding(.horizontal, isNativeClean ? 24 : 16)
+                .padding(.top, isNativeClean ? 20 : 8)
+                .padding(.bottom, 190)
+                .beansAdaptiveContentWidth()
+            }
+            .beansScrollIndicatorsHidden()
+        }
+        .task {
+            source = platformPrefs.ensureVisible(source)
+        }
+        .task(id: source) {
+            await refreshCurrentSource(force: false)
+        }
+        .onAppear {
+            source = platformPrefs.ensureVisible(source)
+        }
+        .onReceive(platformPrefs.changes) { _ in
+            let next = platformPrefs.ensureVisible(source)
+            if next != source { source = next }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .beansNeteaseLoginDidUpdate)) { _ in
+            guard platformPrefs.isEnabled(SearchProvider.netease) else { return }
+            source = .netease
+            Task { await auth.loadLibrary(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .beansQQLoginDidUpdate)) { _ in
+            guard platformPrefs.isEnabled(SearchProvider.qq) else { return }
+            source = .qq
+            Task { await loadQQPlaylists(force: true) }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .beansKugouLoginDidUpdate)) { _ in
+            guard platformPrefs.isEnabled(SearchProvider.kugou) else { return }
+            source = .kugou
+            Task { await loadKugouPlaylists(force: true) }
+        }
+        .sheet(isPresented: $showHistory) {
+            HistoryView()
+                .environmentObject(player)
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
+        .sheet(isPresented: $showSectionSort) {
+            SectionOrderSheet(
+                title: "音乐库板块排序",
+                sections: SectionOrderStore.libraryDefaults,
+                order: $libraryOrder,
+                platformOrder: Binding(
+                    get: { platformPrefs.orderedRaw },
+                    set: { platformPrefs.orderedRaw = $0 }
+                )
+            )
+                .onDisappear { SectionOrderStore.save(SectionOrderStore.libraryKey, libraryOrder) }
+        }
+        .sheet(isPresented: $showSyncedPlaylistSort) {
+            SyncedPlaylistOrderSheet(
+                title: "\(source.rawValue)歌单排序",
+                source: source.songSource,
+                playlists: syncedPlaylistBinding
+            )
+            .environmentObject(theme)
+        }
+        .alert("新建歌单", isPresented: $showCreatePlaylist) {
+            TextField("歌单名称", text: $newPlaylistName)
+            Button("创建") { createPlaylist() }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("输入歌单名称，创建后同步到\(source.rawValue)")
+        }
+        .confirmationDialog("确定删除歌单「\(pendingDelete?.name ?? "")」吗？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("删除", role: .destructive) { confirmDeletePlaylist() }
+            Button("取消", role: .cancel) {}
+        }
+        .sheet(isPresented: $showProfile) {
+            ProfileView(forceHomeBackdrop: true)
+                .environmentObject(theme)
+                .environmentObject(auth)
+                .environmentObject(player)
+                .modifier(BeansProfileSheetBackground())
+        }
+        .confirmationDialog("音乐库平台", isPresented: $showLibraryPlatformMenu, titleVisibility: .visible) {
+            ForEach(libraryProviders) { candidate in
+                Button {
+                    BeansHaptics.tap()
+                    guard source != candidate else { return }
+                    source = candidate
+                } label: {
+                    Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == source ? "checkmark" : candidate.icon)
+                }
+            }
+        }
+        .beansNavigationDestination(for: LibraryRoute.self) { route in
+            libraryDestination(route)
+        }
+    }
+    }
+
+    @ViewBuilder
+    private func libraryDestination(_ route: LibraryRoute) -> some View {
+        switch route {
+        case .playlist(let playlist):
+            PlaylistView(playlist: playlist)
+                .environmentObject(player)
+                .environmentObject(auth)
+                .environmentObject(theme)
+        }
+    }
+
+    private func openRoute(_ route: LibraryRoute) {
+        if #available(iOS 16.0, *) {
+            navigationPath.append(route)
+        } else {
+            legacyRoute = route
+        }
+    }
+
+    private var header: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                    VStack(alignment: .leading, spacing: 4) {
+                    libraryTitleButton
+                    Text(librarySubtitle)
+                        .font(BeansFont.appFont(13))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Spacer()
+                HStack(spacing: 10) {
+                BeansProfileShortcutButton {
+                    showProfile = true
+                }
+                if !hideSortButton {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSectionSort = true
+                    }
+                    GlassIconButton(systemName: "list.number", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSyncedPlaylistSort = true
+                    }
+                }
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private var appleHeader: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .center) {
+                libraryTitleButton
+                Spacer(minLength: 12)
+                BeansProfileShortcutButton {
+                    showProfile = true
+                }
+                if !hideSortButton {
+                    GlassIconButton(systemName: "arrow.up.arrow.down", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSectionSort = true
+                    }
+                    GlassIconButton(systemName: "list.number", forceLiquid: isNativeClean) {
+                        BeansHaptics.tap()
+                        showSyncedPlaylistSort = true
+                    }
+                }
+            }
+            Text(librarySubtitle)
+                .font(BeansFont.appFont(12, .medium))
+                .foregroundStyle(Color.beansComment)
+                .lineLimit(1)
+            Rectangle()
+                .fill(Color.beansLabel.opacity(0.10))
+                .frame(height: 1)
+        }
+        .padding(.top, 4)
+    }
+
+    private var librarySubtitle: String {
+        switch source {
+        case .netease: return beansLocalized("网易云音乐歌单", "NetEase Cloud Music Playlists")
+        case .qq: return "QQ 音乐收藏与歌单"
+        case .kugou: return "酷狗云端歌单"
+        }
+    }
+
+    private var libraryTitleButton: some View {
+        Text("音乐库")
+            .font(BeansFont.appFont(isNativeClean ? 34 : 30, .bold))
+            .foregroundStyle(Color.beansLabel)
+            .contentShape(Rectangle())
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.55)
+                    .onEnded { _ in
+                        guard libraryProviders.count > 1 else { return }
+                        BeansHaptics.select()
+                        showLibraryPlatformMenu = true
+                    }
+            )
+    }
+
+    /// 与搜索页和歌单精选页一致的右上角快捷平台菜单。
+    private var libraryPlatformMenu: some View {
+        Menu {
+            ForEach(libraryProviders) { candidate in
+                Button {
+                    BeansHaptics.tap()
+                    guard source != candidate else { return }
+                    source = candidate
+                } label: {
+                    Label(LocalizedStringKey(candidate.rawValue), systemImage: candidate == source ? "checkmark" : candidate.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                if let imageName = source.brandImageName {
+                    Image(imageName)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 15, height: 15)
+                } else {
+                    Image(systemName: source.icon)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                Text(LocalizedStringKey(source.rawValue))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .font(BeansFont.appFont(12, .semibold))
+            .foregroundStyle(Color.beansComment)
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background {
+                BeansGlass(shape: Capsule())
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(GlassPressButtonStyle(scale: 0.94))
+    }
+
+
+    private var playlistsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "我的歌单", trailing: auth.isLoggedIn ? "新建" : nil) {
+                if auth.isLoggedIn {
+                    BeansHaptics.tap()
+                    newPlaylistName = ""
+                    showCreatePlaylist = true
+                }
+            }
+            if !auth.isLoggedIn {
+                EmptyStateView(icon: "music.note.list", text: "登录网易云音乐后即可查看你的歌单")
+            } else if auth.playlists.isEmpty {
+                createPlaylistCard
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(orderedNeteasePlaylists) { playlist in
+                        Button {
+                            openRoute(LibraryRoute.playlist(playlist))
+                        } label: {
+                            HStack(spacing: 12) {
+                                CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(playlist.name)
+                                        .font(BeansFont.appFont(15, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                    Text(beansSongCountText(playlist.trackCount))
+                                        .font(BeansFont.appFont(12))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment.opacity(0.6))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button {
+                                BeansHaptics.tap()
+                                requestDelete(playlist)
+                            } label: {
+                                Label("删除歌单", systemImage: "trash")
+                            }
+                        }
+                        Divider().overlay(Color.beansComment.opacity(0.12))
+                    }
+                    // 新建歌单行
+                    Button {
+                        BeansHaptics.tap()
+                        newPlaylistName = ""
+                        showCreatePlaylist = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .strokeBorder(style: StrokeStyle(lineWidth: 1.2, dash: [5, 3]))
+                                    .foregroundStyle(Color.beansComment.opacity(0.45))
+                                    .frame(width: 56, height: 56)
+                                Image(systemName: "plus")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(Color.beansComment)
+                            }
+                            Text("新建歌单")
+                                .font(BeansFont.appFont(15, .medium))
+                                .foregroundStyle(Color.beansComment)
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.vertical, 6)
+                .background {
+                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .beansCardShadow(radius: 9, y: 3)
+            }
+        }
+    }
+
+    private var createPlaylistCard: some View {
+        Button {
+            BeansHaptics.tap()
+            newPlaylistName = ""
+            showCreatePlaylist = true
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .strokeBorder(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                        .foregroundStyle(Color.beansComment.opacity(0.45))
+                        .frame(width: 160, height: 160)
+                    Image(systemName: "plus")
+                        .font(.system(size: 26, weight: .medium))
+                        .foregroundStyle(Color.beansComment)
+                }
+                Text("新建歌单")
+                    .font(BeansFont.appFont(12, .medium))
+                    .foregroundStyle(Color.beansComment)
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity)
+            .background {
+                                BeansGlass(shape: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHeader(title: "最近播放", trailing: "查看全部") {
+                showHistory = true
+            }
+            if player.history.isEmpty {
+                EmptyStateView(icon: "clock.arrow.circlepath", text: "暂无播放记录")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(player.history.prefix(5), id: \.identityKey) { song in
+                        SongCell(song: song, suppressNativeCleanRowGlass: isNativeClean) {
+                            playFromHistory(song)
+                        }
+                        Divider().overlay(Color.beansComment.opacity(0.15))
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 6)
+                .background {
+                                        BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .beansCardShadow(radius: 8, y: 3)
+            }
+        }
+    }
+
+    /// 平台选择（网易云 / QQ音乐，样式与主页一致）
+    private var providerPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(libraryProviders) { p in
+                Button {
+                    BeansHaptics.tap()
+                    if source != p { source = p }
+                } label: {
+                    HStack(spacing: 6) {
+                        if let brandImageName = p.brandImageName {
+                            Image(brandImageName)
+                                .resizable()
+                                .scaledToFit()
+                                .frame(width: 16, height: 16)
+                        } else {
+                            Image(systemName: p.icon)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        Text(LocalizedStringKey(p.rawValue))
+                            .font(BeansFont.appFont(13, .semibold))
+                    }
+                    .foregroundStyle(source == p ? Color.white : Color.beansComment)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 9)
+                    .background {
+                        if source == p {
+                            Capsule().fill(p.tint)
+                        } else {
+                            Capsule().fill(.clear)
+                        }
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+                .background { BeansSurface(shape: Capsule()) }
+                .clipShape(Capsule())
+        .beansCardShadow(radius: isNativeClean ? 1 : 6, y: isNativeClean ? 0.5 : 2)
+    }
+
+    private func refreshCurrentSource(force: Bool) async {
+        switch source {
+        case .netease:
+            await auth.loadLibrary(force: force)
+        case .qq:
+            await loadQQPlaylists(force: force)
+        case .kugou:
+            await loadKugouPlaylists(force: force)
+        }
+    }
+
+    /// QQ 模式整体内容（QQ 音乐已移除，仅保留空状态兼容旧路由）
+    private var qqSection: some View {
+        EmptyStateView(icon: "music.note.list", text: "QQ 音乐已移除")
+    }
+
+    /// 酷狗模式整体内容：只保留同步歌单
+    private var kugouSection: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            kugouPlaylistsSection
+        }
+    }
+
+    /// 我的 QQ 歌单（登录后从 QQ 音乐拉取）
+    private var qqPlaylistsSection: some View {
+        EmptyStateView(icon: "music.note.list", text: "QQ 音乐已移除")
+    }
+
+    private var kugouPlaylistsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "我的酷狗歌单", trailing: kugouAuth.isLoggedIn ? "\(kugouPlaylists.count) 个" : nil)
+            if !kugouAuth.isLoggedIn {
+                EmptyStateView(icon: "music.note.list", text: "登录酷狗音乐后即可同步云端歌单")
+            } else if kugouLoading {
+                LoadingStateView()
+            } else if kugouPlaylists.isEmpty {
+                EmptyStateView(icon: "music.note.list", text: "暂未同步到酷狗歌单，请稍后重试")
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(orderedKugouPlaylists) { playlist in
+                        Button {
+                            openRoute(LibraryRoute.playlist(playlist))
+                        } label: {
+                            HStack(spacing: 12) {
+                                CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(playlist.name)
+                                        .font(BeansFont.appFont(15, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                    Text(beansSongCountText(playlist.trackCount))
+                                        .font(BeansFont.appFont(12))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment.opacity(0.6))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider().overlay(Color.beansComment.opacity(0.12))
+                    }
+                }
+                .padding(.vertical, 6)
+                .background {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .beansCardShadow(radius: 8, y: 3)
+            }
+        }
+    }
+
+    // MARK: - 歌单新建 / 删除
+
+    private func loadQQPlaylists(force: Bool = false) async {
+        // QQ 音乐已移除：始终清空本地 QQ 歌单列表。
+        qqPlaylists = []
+        qqLoading = false
+    }
+
+    private func loadKugouPlaylists(force: Bool = false) async {
+        guard kugouAuth.isLoggedIn else {
+            kugouPlaylists = []
+            kugouLoading = false
+            return
+        }
+        let cache = SyncedPlaylistCache.shared
+        if kugouPlaylists.isEmpty,
+           let cached = cache.cachedPlaylists(source: .kugou, accountID: kugouCacheAccountID) {
+            kugouPlaylists = cached.playlists
+            kugouSavedAt = cached.savedAt
+        }
+        if !force, !kugouPlaylists.isEmpty, Date().timeIntervalSince(kugouSavedAt) < cache.playlistTTL { return }
+        kugouLoading = kugouPlaylists.isEmpty
+        do {
+            let list = try await KugouMusicAPI.shared.userPlaylists()
+            if !list.isEmpty {
+                kugouPlaylists = list
+                kugouSavedAt = Date()
+                cache.savePlaylists(list, source: .kugou, accountID: kugouCacheAccountID)
+            }
+        } catch {
+            BeansLogger.shared.log("酷狗歌单同步失败：\(error.localizedDescription)", level: .error)
+            if kugouPlaylists.isEmpty { kugouPlaylists = [] }
+        }
+        kugouLoading = false
+    }
+
+    private func fillQQPlaylistCovers(_ list: [Playlist]) async {
+        // QQ 音乐已移除：无需补齐封面。
+    }
+
+    private func createPlaylist() {
+        let name = newPlaylistName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else {
+            ToastCenter.shared.show("请输入歌单名称")
+            return
+        }
+        switch source {
+        case .netease:
+            ToastCenter.shared.show("网易云音乐已移除")
+        case .qq:
+            ToastCenter.shared.show("QQ 音乐已移除")
+        case .kugou:
+            ToastCenter.shared.show("酷狗歌单暂不支持新建")
+        }
+    }
+
+    private func requestDelete(_ playlist: Playlist) {
+        pendingDelete = playlist
+        showDeleteConfirm = true
+    }
+
+    private func confirmDeletePlaylist() {
+        guard let playlist = pendingDelete else { return }
+        switch source {
+        case .netease:
+            ToastCenter.shared.show("网易云音乐已移除")
+        case .qq:
+            ToastCenter.shared.show("QQ 音乐已移除")
+        case .kugou:
+            ToastCenter.shared.show("酷狗歌单暂不支持删除")
+        }
+    }
+
+    private func playFromHistory(_ song: Song) {
+        if let index = player.history.firstIndex(of: song) {
+            player.play(songs: player.history, startAt: index)
+        }
+    }
+}
+

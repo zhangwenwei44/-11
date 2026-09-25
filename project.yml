@@ -1,0 +1,69 @@
+name: Beans
+
+options:
+  deploymentTarget:
+    iOS: "15.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+
+targets:
+  Beans:
+    type: application
+    platform: iOS
+    sources:
+      - Beans
+    resources:
+      - Beans/en.lproj
+      - Beans/zh-Hans.lproj
+      - Beans/Resources/XProfile.html
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.beans.app
+        MARKETING_VERSION: "1.7.01"
+        CURRENT_PROJECT_VERSION: "3"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_OBJC_BRIDGING_HEADER: Beans/Beans-Bridging-Header.h
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_ENTITLEMENTS: Beans/Beans.entitlements
+    info:
+      path: Beans/Info.plist
+      properties:
+        CFBundleDisplayName: Beans Music
+        LSRequiresIPhoneOS: true
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UIBackgroundModes: [audio]
+        UILaunchScreen:
+          UIImageName: LaunchBackground
+          UIColorName: LaunchBackgroundColor
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        "UISupportedInterfaceOrientations~ipad":
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIRequiresFullScreen: false
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        CADisableMinimumFrameDurationOnPhone: true
+        UISupportsCarPlay: true
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneConfigurationName: CarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).CarPlaySceneDelegate
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+schemes:
+  Beans:
+    build:
+      targets:
+        Beans: all
+    run:
+      config: Debug
+    archive:
+      config: Release

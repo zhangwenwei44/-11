@@ -70,7 +70,18 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee xcodebuild.log
+
+      - name: Commit build errors on failure
+        if: failure()
+        run: |
+          mkdir -p ci-logs
+          grep -E "error:|fatal error|The following build commands failed|BUILD FAILED|xcodebuild: error" xcodebuild.log > ci-logs/xcodebuild-errors.log || cp xcodebuild.log ci-logs/xcodebuild-errors.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f ci-logs/xcodebuild-errors.log
+          git commit -m "ci: capture build errors [skip ci]" || exit 0
+          git push
 
       - name: Verify version in built app
         run: |

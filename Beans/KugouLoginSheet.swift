@@ -1,5 +1,14 @@
 import SwiftUI
 
+private enum QRStatus: Equatable {
+    case loading
+    case waiting
+    case scanned
+    case success
+    case expired
+    case error(String)
+}
+
 struct KugouLoginSheet: View {
     @EnvironmentObject private var theme: ThemeStore
     @Environment(\.dismiss) private var dismiss

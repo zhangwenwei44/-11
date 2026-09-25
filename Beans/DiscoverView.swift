@@ -1012,7 +1012,7 @@ struct DiscoverView: View {
         let cardHeight: CGFloat = isNativeClean ? 172 : 160
         VStack(alignment: .leading, spacing: 14) {
             if !isNativeClean {
-                SectionHeader(title: "推荐")
+                SectionHeader(title: "\(source.shortName)推荐")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
@@ -1041,7 +1041,7 @@ struct DiscoverView: View {
     private var kugouRecommendationCards: some View {
         VStack(alignment: .leading, spacing: 14) {
             if !isNativeClean {
-                SectionHeader(title: "推荐")
+                SectionHeader(title: "\(source.shortName)推荐")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {
@@ -1082,7 +1082,7 @@ struct DiscoverView: View {
     private var neteaseRecommendationCards: some View {
         VStack(alignment: .leading, spacing: 14) {
             if !isNativeClean {
-                SectionHeader(title: "推荐")
+                SectionHeader(title: "\(source.shortName)推荐")
             }
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 14) {

@@ -40,13 +40,9 @@ enum ChangelogStore {
         UserDefaults.standard.synchronize()
     }
 
-    static var shouldShowWhatsNew: Bool {
-        lastSeenVersion != currentVersion
-    }
-
     static var latest: VersionLog? { logs.first }
 
-    /// 更新日志从 GitHub Releases 读取；网络不可用时继续显示内置历史记录。
+    /// 更新日志从 GitHub Releases 读取；网络不可用时返回空。
     static func fetchRemoteLatest() async -> VersionLog? {
         guard let remote = try? await UpdateChecker.fetchLatest() else { return nil }
         return versionLog(from: remote)
@@ -73,82 +69,11 @@ enum ChangelogStore {
         )
     }
 
-    static let logs: [VersionLog] = [
-        VersionLog(
-            id: "1.6.7",
-            version: "1.6.7",
-            title: "主页、播放器与缓存体验优化",
-            notices: [
-                "建议更新时卸载后重新安装，不要覆盖安装，否则可能出现部分问题。",
-                "不是最新版请不要反馈问题，旧版本不再维护。",
-                "本软件不提供下载服务，请支持官方网易云音乐、QQ 音乐和酷狗音乐平台。"
-            ],
-            features: [
-                "新增“新碟上架”和“歌手”板块",
-                "新增歌单搜索，并将歌单广场独立为单独页面",
-                "“我的”入口移至右上角，支持自定义昵称和头像",
-                "新增灵动岛与控制中心显示开关",
-                "新增多项缓存机制，提升加载速度和使用体验",
-                "优化底部栏动画，适配 Apple Music 风格的自动收缩效果",
-                "Apple Music 风格主页新增磨砂背景",
-                "账号入口移至设置页面",
-                "修改默认强调色",
-                "优化音源播放与切歌速度",
-                "更新底部栏图标样式",
-                "移除歌单液态容器"
-            ],
-            fixes: [
-                "修复低版本系统无法调节进度条的问题",
-                "修复歌词与音乐进度不同步的问题",
-                "修复自定义排序后重新打开应用失效的问题"
-            ]
-        ),
-        VersionLog(
-            id: "1.6.6",
-            version: "1.6.6",
-            title: "歌单广场与播放体验优化",
-            features: [
-                "新增网易云和 QQ 音乐歌单广场搜索功能",
-                "优化歌曲封面缓存",
-                "优化歌词滑动后不返回当前播放位置的问题",
-                "优化整体流畅性，低系统表现以实际测试为准",
-                "优化网易云私人漫游问题，遇到问题可使用心动模式",
-                "简化搜索界面，移除均衡器注释",
-                "更换酷狗音乐歌单广场接口",
-                "整体以优化和问题修复为主"
-            ],
-            fixes: [
-                "修复 QQ 音乐本身有会员但无法播放的问题",
-                "修复 iOS 26 以下系统无法返回的问题"
-            ]
-        ),
-        VersionLog(
-            id: "1.6.5.1",
-            version: "1.6.5.1",
-            title: "音源与歌单体验修复",
-            features: [
-                "修复歌单页播放器无法返回的问题",
-                "删除内置音源功能和填写密钥（可从密钥后台复制链接导入）",
-                "持续优化 QQ 音源问题",
-                "增加歌单、主页和排行榜缓存，减少重复加载"
-            ],
-            fixes: [
-                "软件不提供任何下载服务，不会导入音源的可在群里反馈"
-            ]
-        ),
-        VersionLog(
-            id: "1.6.5",
-            version: "1.6.5",
-            title: "音源播放修复",
-            features: [
-                "新增网易云免费音源"
-            ],
-            fixes: [
-                "修复 QQ 音乐音源不能播放的问题",
-                "修复自定义导入音源不能播放的问题"
-            ]
-        ),
-    ]
+    /// 内置历史公告已全部删除；首启不再弹「更新说明」。
+    static var shouldShowWhatsNew: Bool { false }
+
+    /// 内置历史公告已全部删除；更新日志统一从 GitHub Releases 读取。
+    static let logs: [VersionLog] = []
 }
 
 // MARK: - 更新说明弹窗

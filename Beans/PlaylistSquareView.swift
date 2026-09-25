@@ -7,6 +7,7 @@ struct PlaylistSquareView: View {
     @EnvironmentObject private var player: PlayerManager
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var playlistFavorites = PlaylistFavoritesStore.shared
 
     @AppStorage("beans.playlistSquareSource") private var playlistSourceRaw = SearchProvider.kugou.rawValue
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
@@ -300,6 +301,7 @@ struct PlaylistSquareView: View {
     private func playlistCard(_ playlist: Playlist, showsContainer: Bool = true) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             CoverImage(url: playlist.coverURL, size: 150, cornerRadius: isNativeClean ? 14 : 16)
+                .overlay(alignment: .topTrailing) { favoriteButton(for: playlist) }
             Text(playlist.name)
                 .font(BeansFont.appFont(13, .medium))
                 .foregroundStyle(Color.beansLabel)
@@ -343,6 +345,7 @@ struct PlaylistSquareView: View {
         GeometryReader { proxy in
             VStack(spacing: 8) {
                 CoverImage(url: playlist.coverURL, size: proxy.size.width, cornerRadius: 14)
+                    .overlay(alignment: .topTrailing) { favoriteButton(for: playlist) }
                 Text(playlist.name)
                     .font(BeansFont.appFont(14, .semibold))
                     .foregroundStyle(Color.beansLabel)
@@ -360,6 +363,24 @@ struct PlaylistSquareView: View {
         }
         .aspectRatio(0.78, contentMode: .fit)
         .contentShape(Rectangle())
+    }
+
+    /// 歌单卡片右上角收藏按钮（收藏后可在「音乐库」页查看）
+    private func favoriteButton(for playlist: Playlist) -> some View {
+        let isFavorite = playlistFavorites.contains(playlist)
+        return Button {
+            BeansHaptics.tap()
+            playlistFavorites.toggle(playlist)
+        } label: {
+            Image(systemName: isFavorite ? "heart.fill" : "heart")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(isFavorite ? Color(red: 0.95, green: 0.30, blue: 0.32) : Color.white)
+                .padding(7)
+                .background(.black.opacity(0.34), in: Circle())
+                .padding(6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isFavorite ? "取消收藏" : "收藏歌单")
     }
 
     private func sourceDisplayName(_ source: SongSource) -> String {

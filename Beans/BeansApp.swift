@@ -43,7 +43,7 @@ struct BeansApp: App {
                     .environmentObject(player)
                     .environmentObject(theme)
                     .environmentObject(favorites)
-                // 未确认前展示首次使用引导页（分页引导 + 免责确认）
+                // 未确认前展示首次使用免责声明确认页
                 if !disclaimerAccepted {
                     OnboardingView { disclaimerAccepted = true }
                 }

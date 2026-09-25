@@ -1,7 +1,8 @@
 import Foundation
+import UIKit
 
 struct UpdateChecker {
-    static let repoPath = "XIaodou0416/Beans-Music"
+    static let repoPath = "zhangwenwei44/-11"
     static let releasePageURL = URL(string: "https://github.com/\(repoPath)/releases/latest")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases/latest")!
     private static let releasesAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases?per_page=100")!
@@ -15,6 +16,15 @@ struct UpdateChecker {
         let htmlURL: URL
         let notesImageURL: URL?
         let notesTextColorHex: String?
+        /// Release 中 manifest.plist 的地址；用于应用内直接推送安装包。
+        let manifestURL: URL?
+
+        /// itms-services 安装链接：点击后系统直接下载并安装 ipa（越狱设备需 AppSync）。
+        var installURL: URL? {
+            guard let manifestURL,
+                  let encoded = manifestURL.absoluteString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else { return nil }
+            return URL(string: "itms-services://?action=download-manifest&url=\(encoded)")
+        }
     }
 
     enum CheckResult {
@@ -47,6 +57,15 @@ struct UpdateChecker {
         UserDefaults.standard.synchronize()
     }
 
+    /// 应用内直接推送安装包：优先走 itms-services 系统安装，失败时退回 Release 页面。
+    static func openInstall(_ info: ReleaseInfo) {
+        guard let url = info.installURL else {
+            UIApplication.shared.open(info.htmlURL)
+            return
+        }
+        UIApplication.shared.open(url)
+    }
+
     static func fetchLatest() async throws -> ReleaseInfo {
         var request = URLRequest(url: latestAPI)
         request.setValue("Beans-Music/\(currentVersion)", forHTTPHeaderField: "User-Agent")
@@ -62,13 +81,18 @@ struct UpdateChecker {
             throw URLError(.cannotParseResponse)
         }
         let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
+        let assets = json["assets"] as? [[String: Any]]
+        let manifestAsset = assets?.first { ($0["name"] as? String) == "manifest.plist" }
+        let manifestURL = (manifestAsset?["browser_download_url"] as? String).flatMap(URL.init(string:))
+            ?? URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/manifest.plist")
         return ReleaseInfo(
             version: version,
             name: json["name"] as? String ?? tag,
             body: json["body"] as? String ?? "",
             htmlURL: url,
             notesImageURL: nil,
-            notesTextColorHex: nil
+            notesTextColorHex: nil,
+            manifestURL: manifestURL
         )
     }
 
@@ -99,7 +123,8 @@ struct UpdateChecker {
                 body: release.body ?? "",
                 htmlURL: htmlURL,
                 notesImageURL: nil,
-                notesTextColorHex: nil
+                notesTextColorHex: nil,
+                manifestURL: URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/manifest.plist")
             )
         }
     }

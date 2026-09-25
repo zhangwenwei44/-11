@@ -27,8 +27,6 @@ struct ProfileView: View {
     @State private var showUpdateResult = false
     @State private var didRefreshProfileAccount = false
     @State private var showAvatarPicker = false
-    @State private var easterEggStep = 0
-    @State private var easterEggPrompt = "点我有惊喜"
     @AppStorage("beans.profile.customNickname") private var customNickname = ""
     @ObservedObject private var avatarStore = BeansAvatarStore.shared
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
@@ -65,7 +63,7 @@ struct ProfileView: View {
 
     private var appVersionText: String {
         let ver = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.2"
-        return "Beans Music · \(ver)"
+        return "酷狗播放器 · \(ver)"
     }
 
     /// 登录状态的合并提示（展示各平台真实昵称）
@@ -159,7 +157,6 @@ struct ProfileView: View {
                     }
                     customAvatarCard
                     communityCard
-                    easterEggCard
                     profileVersionFooter
                 }
                 .padding(.horizontal, isNativeClean ? 24 : 16)
@@ -198,7 +195,7 @@ struct ProfileView: View {
         .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
             switch result {
             case .update(let info):
-                Button("立即更新") { UIApplication.shared.open(info.htmlURL) }
+                Button("立即更新") { UpdateChecker.openInstall(info) }
                 Button("取消", role: .cancel) {}
             case .upToDate:
                 Button("好", role: .cancel) {}
@@ -208,7 +205,7 @@ struct ProfileView: View {
         } message: { result in
             switch result {
             case .update(let info):
-                Text("发现新版本 \(info.version)，是否前往 GitHub 下载更新？")
+                Text("发现新版本 \(info.version)，是否立即下载安装包？")
             case .upToDate:
                 Text("当前已是最新版本 \(UpdateChecker.currentVersion)")
             case .failed:
@@ -299,45 +296,6 @@ struct ProfileView: View {
             Spacer(minLength: 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var easterEggCard: some View {
-        Button {
-            BeansHaptics.tap()
-            switch easterEggStep {
-            case 0:
-                easterEggStep = 1
-                easterEggPrompt = ["再点一下", "求你了，再点一下", "哥哥我要来了"].randomElement() ?? "再点一下"
-            case 1:
-                easterEggStep = 2
-                easterEggPrompt = ["最后一下！！", "马上出来了！！", "啊啊我要来了"].randomElement() ?? "最后一下！！"
-            default:
-                NotificationCenter.default.post(name: .beansEasterEggRequested, object: nil)
-                easterEggStep = 0
-                easterEggPrompt = "点我有惊喜"
-            }
-        } label: {
-            HStack(spacing: 11) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color.beansAmber)
-                    .frame(width: 28)
-                Text(easterEggPrompt)
-                    .font(BeansFont.appFont(14, .semibold))
-                    .foregroundStyle(Color.beansLabel)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color.beansComment.opacity(0.65))
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 13)
-            .background {
-                BeansGlass(shape: RoundedRectangle(cornerRadius: 18, style: .continuous))
-            }
-            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        }
-        .buttonStyle(GlassPressButtonStyle(scale: 0.98))
     }
 
     private var userCard: some View {
@@ -1272,7 +1230,7 @@ struct SettingsView: View {
         .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
             switch result {
             case .update(let info):
-                Button("立即更新") { UIApplication.shared.open(info.htmlURL) }
+                Button("立即更新") { UpdateChecker.openInstall(info) }
                 Button("取消", role: .cancel) {}
             case .upToDate, .failed:
                 Button("好", role: .cancel) {}
@@ -1280,7 +1238,7 @@ struct SettingsView: View {
         } message: { result in
             switch result {
             case .update(let info):
-                Text("发现新版本 (info.version)，是否前往更新页？")
+                Text("发现新版本 \(info.version)，是否立即下载安装包？")
             case .upToDate:
                 Text("当前已是最新版本")
             case .failed:

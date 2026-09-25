@@ -57,6 +57,7 @@ struct LibraryView: View {
     @Environment(\.beansUsesSharedRootBackdrop) private var usesSharedRootBackdrop
     @ObservedObject private var kugouAuth = KugouMusicAuth.shared
     @ObservedObject private var platformPrefs = PlatformPreferenceStore.shared
+    @ObservedObject private var playlistFavorites = PlaylistFavoritesStore.shared
 
     @State private var showHistory = false
     @State private var showLibraryPlatformMenu = false
@@ -156,6 +157,8 @@ struct LibraryView: View {
                     } else {
                         header
                     }
+                    // 精选页收藏的歌单
+                    favoritePlaylistsSection
                     // 板块按用户自定义顺序渲染（可拖拽排序）
                     ForEach(libraryOrder, id: \.self) { key in
                         switch key {
@@ -493,6 +496,62 @@ struct LibraryView: View {
                 .padding(.vertical, 6)
                 .background {
                                         BeansGlass(shape: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .beansCardShadow(radius: 9, y: 3)
+            }
+        }
+    }
+
+    /// 精选页收藏的歌单（点开详情，长按可取消收藏）
+    @ViewBuilder
+    private var favoritePlaylistsSection: some View {
+        if !playlistFavorites.playlists.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeader(title: "我收藏的歌单")
+                VStack(spacing: 0) {
+                    ForEach(playlistFavorites.playlists) { playlist in
+                        Button {
+                            openRoute(LibraryRoute.playlist(playlist))
+                        } label: {
+                            HStack(spacing: 12) {
+                                CoverImage(url: playlist.coverURL, size: 56, cornerRadius: 12)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(playlist.name)
+                                        .font(BeansFont.appFont(15, .medium))
+                                        .foregroundStyle(Color.beansLabel)
+                                        .lineLimit(1)
+                                    Text(beansSongCountText(playlist.trackCount))
+                                        .font(BeansFont.appFont(12))
+                                        .foregroundStyle(Color.beansComment)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color(red: 0.95, green: 0.30, blue: 0.32))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.beansComment.opacity(0.6))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 10)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                BeansHaptics.tap()
+                                playlistFavorites.remove(playlist)
+                            } label: {
+                                Label("取消收藏", systemImage: "heart.slash")
+                            }
+                        }
+                        Divider().overlay(Color.beansComment.opacity(0.12))
+                    }
+                }
+                .padding(.vertical, 6)
+                .background {
+                    BeansGlass(shape: RoundedRectangle(cornerRadius: 24, style: .continuous))
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .beansCardShadow(radius: 9, y: 3)

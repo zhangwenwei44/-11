@@ -208,7 +208,7 @@ final class BeansCarPlayCoordinator: NSObject {
                 self?.pushTrackList(title: "每日推荐", tracks: daily)
                 completion()
             }
-            sections.append(CPListSection(items: [dailyItem], header: "Beans Music", sectionIndexTitle: nil))
+            sections.append(CPListSection(items: [dailyItem], header: "酷狗播放器", sectionIndexTitle: nil))
         }
 
         if !playlists.isEmpty {

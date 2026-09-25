@@ -75,6 +75,15 @@ enum SearchProvider: String, CaseIterable, Identifiable, Hashable {
         case .kugou: return "BrandKugou"
         }
     }
+
+    /// 短名称：用于主页板块标题（如「酷狗推荐」）
+    var shortName: String {
+        switch self {
+        case .netease: return "网易云"
+        case .qq: return "QQ"
+        case .kugou: return "酷狗"
+        }
+    }
 }
 
 enum SearchResultType: String, CaseIterable, Identifiable, Hashable {

@@ -113,6 +113,54 @@ jobs:
           test -f Payload/Beans.app/Info.plist
           test -x Payload/Beans.app/Beans
 
+      - name: Generate install manifest (itms-services)
+        run: |
+          python3 - <<'PYEOF'
+          import re
+          ver = open('version.txt').read().strip()
+          tag = 'v' + ver
+          yml = open('project.yml', encoding='utf-8').read()
+          bid = re.search(r'PRODUCT_BUNDLE_IDENTIFIER:\s*(\S+)', yml).group(1)
+          disp = re.search(r'CFBundleDisplayName:\s*(.+)', yml).group(1).strip()
+          ipa_url = 'https://github.com/zhangwenwei44/-11/releases/download/%s/Beans-unsigned.ipa' % tag
+          lines = [
+              '<?xml version="1.0" encoding="UTF-8"?>',
+              '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
+              '<plist version="1.0">',
+              '<dict>',
+              '  <key>items</key>',
+              '  <array>',
+              '    <dict>',
+              '      <key>assets</key>',
+              '      <array>',
+              '        <dict>',
+              '          <key>kind</key>',
+              '          <string>software-package</string>',
+              '          <key>url</key>',
+              '          <string>' + ipa_url + '</string>',
+              '        </dict>',
+              '      </array>',
+              '      <key>metadata</key>',
+              '      <dict>',
+              '        <key>bundle-identifier</key>',
+              '        <string>' + bid + '</string>',
+              '        <key>bundle-version</key>',
+              '        <string>' + ver + '</string>',
+              '        <key>kind</key>',
+              '        <string>software</string>',
+              '        <key>title</key>',
+              '        <string>' + disp + '</string>',
+              '      </dict>',
+              '    </dict>',
+              '  </array>',
+              '</dict>',
+              '</plist>',
+          ]
+          open('manifest.plist', 'w', encoding='utf-8').write('\n'.join(lines) + '\n')
+          print('\n'.join(lines))
+          PYEOF
+          test -s manifest.plist
+
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
@@ -127,7 +175,7 @@ jobs:
           content = open('CHANGELOG.md', encoding='utf-8').read()
           m = re.search(r'^##\s+' + re.escape(ver) + r'\s*$([\s\S]*?)(?=^##\s|\Z)', content, re.M)
           body = m.group(1).strip() if m else ('版本 ' + ver + ' 的更新内容。')
-          body = '# Beans Music ' + ver + '\n\n' + body + '\n'
+          body = '# 酷狗播放器 ' + ver + '\n\n' + body + '\n'
           with open('release_body.md', 'w', encoding='utf-8') as f:
               f.write(body)
           print(body)
@@ -140,9 +188,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ env.VERSION_TAG }}
-          name: Beans Music ${{ env.VERSION_LABEL }}
+          name: 酷狗播放器 ${{ env.VERSION_LABEL }}
           body_path: release_body.md
-          files: Beans-unsigned.ipa
+          files: |
+            Beans-unsigned.ipa
+            manifest.plist
           update_release_body: true
           update_release_name: true
           update_release_assets: true

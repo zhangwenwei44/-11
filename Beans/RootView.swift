@@ -359,7 +359,7 @@ struct RootView: View {
                     info: info,
                     onOpen: {
                         showUpdateAlert = false
-                        UIApplication.shared.open(info.htmlURL)
+                        UpdateChecker.openInstall(info)
                     },
                     onRemindLater: {
                         UpdateChecker.suppress(version: info.version)
@@ -1369,7 +1369,7 @@ private struct UpdatePromptOverlay: View {
                         Text("发现新版本")
                             .font(BeansFont.appFont(20, .bold))
                             .foregroundStyle(Color.beansLabel)
-                        Text("Beans Music \(info.version)")
+                        Text("酷狗播放器 \(info.version)")
                             .font(BeansFont.appFont(13, .semibold))
                             .foregroundStyle(Color.beansAmber)
                     }

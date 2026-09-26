@@ -189,7 +189,7 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showSettings) {
             settingsScreen(SettingsView(onClose: { showSettings = false }))
-                .modifier(BeansSheetModifier(detents: [.fraction(0.62), .large], dragIndicator: true))
+                .modifier(BeansSheetModifier(detents: [.large], dragIndicator: false))
                 .modifier(SettingsLiquidSheetPresentation())
         }
         .alert("检查更新", isPresented: $showUpdateResult, presenting: updateResult) { result in
@@ -1145,7 +1145,7 @@ struct SettingsView: View {
         ZStack {
             // Settings is presented over the home screen. Sample the same
             // wallpaper/backdrop as the home cards so its clear glass does not
-            // turn into a milky white surface at either sheet detent.
+            // turn into a milky white surface against the full-screen sheet.
             GlassBackdrop(customColor: theme.customBackground, homeMode: true)
             SettingsCompactGlassSurface()
             if settingsContentReady {
@@ -1286,6 +1286,7 @@ struct SettingsView: View {
     private var settingsScrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                AnyView(settingsTitleBar)
                 AnyView(settingsSearchField)
                 AnyView(coreSettingsGroup)
                 AnyView(playbackSettingsGroup)
@@ -1299,11 +1300,25 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 14)
+            .padding(.top, 8)
             .padding(.bottom, 40)
             .beansAdaptiveContentWidth()
         }
         .beansScrollIndicatorsHidden()
+    }
+
+    /// 全屏设置页的标题栏。取消 detent 拖拽条后，关闭入口只能由这里提供。
+    private var settingsTitleBar: some View {
+        HStack(alignment: .center) {
+            Text("设置")
+                .font(BeansFont.appFont(30, .bold))
+                .foregroundStyle(Color.beansLabel)
+            Spacer()
+            GlassIconButton(systemName: "xmark", forceLiquid: true) {
+                closeSettings()
+            }
+        }
+        .padding(.top, 6)
     }
 
     private func closeSettings() {
@@ -3290,9 +3305,10 @@ private struct SettingsLiquidSheetPresentation: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if #available(iOS 16.4, *) {
+            // 设置页已改为全屏呈现，去掉顶部圆角以免露出底下的「我的」页面。
             content
                 .presentationBackground(.clear)
-                .presentationCornerRadius(28)
+                .presentationCornerRadius(0)
         } else {
             content
         }

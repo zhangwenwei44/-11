@@ -1,5 +1,4 @@
 import AVKit
-import AVRouting
 import SwiftUI
 import MediaPlayer
 import UIKit
@@ -675,13 +674,8 @@ private final class KugouBackdropLoader: ObservableObject {
 // MARK: - 顶部投屏按钮（系统音频路由选择）
 
 private struct AirPlayRoutePicker: UIViewRepresentable {
-    func makeUIView(context: Context) -> AVRoutePickerView {
-        let view = AVRoutePickerView()
-        view.backgroundColor = .clear
-        view.tintColor = .white
-        view.activeTintColor = .white
-        return view
+    func makeUIView(context: Context) -> UIView {
+        UIView()
     }
-
-    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
+    func updateUIView(_ uiView: UIView, context: Context) {}
 }

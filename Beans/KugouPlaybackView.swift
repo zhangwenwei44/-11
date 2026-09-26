@@ -59,6 +59,20 @@ struct KugouPlaybackView: View {
         return (0.299 * Double(r) + 0.587 * Double(g) + 0.114 * Double(b)) > 0.55
     }
 
+    private var tintColorLight: Color {
+        guard let c = backdropLoader.dominantColor else { return .black }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: nil)
+        return Color(red: min(1, Double(r + 0.15)), green: min(1, Double(g + 0.15)), blue: min(1, Double(b + 0.15)))
+    }
+
+    private var tintColorDark: Color {
+        guard let c = backdropLoader.dominantColor else { return .black }
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: nil)
+        return Color(red: max(0, Double(r - 0.15)), green: max(0, Double(g - 0.15)), blue: max(0, Double(b - 0.15)))
+    }
+
     private var adaptiveInkPrimary: Color { isTintLight ? .black : .white }
     private var adaptiveInkSecondary: Color { isTintLight ? .black.opacity(0.56) : .white.opacity(0.62) }
     private var adaptiveInkFaint: Color { isTintLight ? .black.opacity(0.38) : .white.opacity(0.4) }
@@ -164,19 +178,15 @@ struct KugouPlaybackView: View {
             .ignoresSafeArea()
 
             // 沉浸式亮纱：上半屏露出封面，中下部渐亮承载信息与控件；颜色跟随背景图主色
-            var tintR: CGFloat = 0, tintG: CGFloat = 0, tintB: CGFloat = 0
-            (backdropLoader.dominantColor ?? .black).getRed(&tintR, green: &tintG, blue: &tintB, alpha: nil)
-            let tintLight = Color(red: min(1, Double(tintR + 0.15)), green: min(1, Double(tintG + 0.15)), blue: min(1, Double(tintB + 0.15)))
-            let tintDark = Color(red: max(0, Double(tintR - 0.15)), green: max(0, Double(tintG - 0.15)), blue: max(0, Double(tintB - 0.15)))
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.20),
-                    .init(color: tintLight.opacity(0.30), location: 0.28),
-                    .init(color: tintLight.opacity(0.55), location: 0.38),
-                    .init(color: tint.opacity(0.80), location: 0.48),
-                    .init(color: tintDark.opacity(0.85), location: 0.60),
-                    .init(color: tintDark.opacity(0.92), location: 0.78),
-                    .init(color: tintDark.opacity(0.95), location: 1.0)
+                    .init(color: tintColorLight.opacity(0.30), location: 0.28),
+                    .init(color: tintColorLight.opacity(0.55), location: 0.38),
+                    .init(color: tintColor.opacity(0.80), location: 0.48),
+                    .init(color: tintColorDark.opacity(0.85), location: 0.60),
+                    .init(color: tintColorDark.opacity(0.92), location: 0.78),
+                    .init(color: tintColorDark.opacity(0.95), location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom

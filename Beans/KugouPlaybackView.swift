@@ -47,12 +47,16 @@ struct KugouPlaybackView: View {
 
     private var tintColor: Color {
         guard let c = backdropLoader.dominantColor else { return .black }
-        return Color(red: c.red, green: c.green, blue: c.blue)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: nil)
+        return Color(red: Double(r), green: Double(g), blue: Double(b))
     }
 
     private var isTintLight: Bool {
         guard let c = backdropLoader.dominantColor else { return false }
-        return (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) > 0.55
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
+        c.getRed(&r, green: &g, blue: &b, alpha: nil)
+        return (0.299 * Double(r) + 0.587 * Double(g) + 0.114 * Double(b)) > 0.55
     }
 
     private var adaptiveInkPrimary: Color { isTintLight ? .black : .white }
@@ -160,10 +164,10 @@ struct KugouPlaybackView: View {
             .ignoresSafeArea()
 
             // 沉浸式亮纱：上半屏露出封面，中下部渐亮承载信息与控件；颜色跟随背景图主色
-            let tint = backdropLoader.dominantColor ?? .black
-            let tintR = CGFloat(tint.red); let tintG = CGFloat(tint.green); let tintB = CGFloat(tint.blue)
-            let tintLight = Color(red: min(1, tintR + 0.15), green: min(1, tintG + 0.15), blue: min(1, tintB + 0.15))
-            let tintDark = Color(red: max(0, tintR - 0.15), green: max(0, tintG - 0.15), blue: max(0, tintB - 0.15))
+            var tintR: CGFloat = 0, tintG: CGFloat = 0, tintB: CGFloat = 0
+            (backdropLoader.dominantColor ?? .black).getRed(&tintR, green: &tintG, blue: &tintB, alpha: nil)
+            let tintLight = Color(red: min(1, Double(tintR + 0.15)), green: min(1, Double(tintG + 0.15)), blue: min(1, Double(tintB + 0.15)))
+            let tintDark = Color(red: max(0, Double(tintR - 0.15)), green: max(0, Double(tintG - 0.15)), blue: max(0, Double(tintB - 0.15)))
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.20),
@@ -241,8 +245,8 @@ struct KugouPlaybackView: View {
     private func coverPage(size: CGSize) -> some View {
         // 背景图缩小显示中间：去除 frosted 头像框，用直出背景图
         GeometryReader { geo in
-            let imgSize = min(geo.width * 0.58, geo.height * 0.50)
-            let imgX = (geo.width - imgSize) / 2
+            let imgSize = min(geo.size.width * 0.58, geo.size.height * 0.50)
+            let imgX = (geo.size.width - imgSize) / 2
             let imgY = geo.size.height * 0.14
 
             if let image = backdropLoader.image {

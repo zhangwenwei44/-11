@@ -18,14 +18,11 @@ jobs:
   build-ipa:
     runs-on: macos-26
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          clean: true
-          fetch-depth: 0
-
-      - name: Force clean working tree
-        run: git reset --hard HEAD && git clean -fdx
+      - name: Fresh clone
+        run: |
+          rm -rf /home/runner/work/-11/-11
+          mkdir -p /home/runner/work/-11
+          git clone --depth 1 https://github.com/zhangwenwei44/-11.git /home/runner/work/-11/-11
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

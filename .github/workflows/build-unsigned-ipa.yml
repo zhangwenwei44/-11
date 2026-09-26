@@ -20,6 +20,20 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
+
+      - name: Verify and fix KugouPlaybackView.swift
+        run: |
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "First lines of KugouPlaybackView.swift:"
+          head -5 Beans/KugouPlaybackView.swift
+          # Force-overwrite with the correct version from GitHub API
+          curl -fsSL "https://raw.githubusercontent.com/zhangwenwei44/-11/main/Beans/KugouPlaybackView.swift" -o Beans/KugouPlaybackView.swift
+          echo "After fix:"
+          head -5 Beans/KugouPlaybackView.swift
+          grep -n 'getRed\|geo\.size' Beans/KugouPlaybackView.swift | head -5
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

@@ -20,15 +20,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          clean: true
-          fetch-depth: 0
-
-      - name: Force refresh KugouPlaybackView from HEAD
-        run: |
-          cd /Users/runner/work/-11/-11
-          git checkout HEAD -- Beans/KugouPlaybackView.swift
-          head -5 Beans/KugouPlaybackView.swift
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

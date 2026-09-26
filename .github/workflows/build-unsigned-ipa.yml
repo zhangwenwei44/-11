@@ -19,12 +19,15 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Clone repo
+        shell: bash
         run: |
+          set -e
           rm -rf /tmp/beans-repo
           git clone --depth 1 https://github.com/zhangwenwei44/-11.git /tmp/beans-repo
           cp -r /tmp/beans-repo/* .
-          head -3 Beans/KugouPlaybackView.swift
-          echo "--- Lines 48-52 ---"
+          echo "File size:"
+          wc -l Beans/KugouPlaybackView.swift
+          echo "Lines 48-52:"
           sed -n '48,52p' Beans/KugouPlaybackView.swift
 
       - name: Install XcodeGen

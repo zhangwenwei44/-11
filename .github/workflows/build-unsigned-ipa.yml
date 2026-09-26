@@ -26,19 +26,26 @@ jobs:
 
       - name: Force refresh KugouPlaybackView.swift
         run: |
+          set -e
           python3 - <<'PYEOF'
           import urllib.request
-          url = "https://api.github.com/repos/zhangwenwei44/-11/contents/Beans/KugouPlaybackView.swift?ref=main"
           import json
-          with urllib.request.urlopen(url) as resp:
-              data = json.loads(resp.read())
           import base64
+          url = "https://api.github.com/repos/zhangwenwei44/-11/contents/Beans/KugouPlaybackView.swift?ref=main"
+          req = urllib.request.Request(url, headers={'User-Agent': 'opencode'})
+          with urllib.request.urlopen(req) as resp:
+              data = json.loads(resp.read())
+          if 'content' not in data:
+              print("ERROR: API response:", data)
+              raise SystemExit(1)
           content = base64.b64decode(data['content'])
           with open('Beans/KugouPlaybackView.swift', 'wb') as f:
               f.write(content)
           print("Downloaded", len(content), "bytes")
           PYEOF
           head -3 Beans/KugouPlaybackView.swift
+          echo "--- Lines 48-52 ---"
+          sed -n '48,52p' Beans/KugouPlaybackView.swift
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

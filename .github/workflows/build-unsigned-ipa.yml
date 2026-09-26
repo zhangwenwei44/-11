@@ -61,9 +61,10 @@ jobs:
           echo "Building with MARKETING_VERSION=$VER CURRENT_PROJECT_VERSION=$BUILD"
           echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
           echo "VERSION_LABEL=$VER" >> "$GITHUB_ENV"
-          echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
-          xcodebuild \
-            -project Beans.xcodeproj \
+echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
+            rm -rf build
+            xcodebuild \
+              -project Beans.xcodeproj \
             -scheme Beans \
             -configuration Release \
             -sdk iphoneos \

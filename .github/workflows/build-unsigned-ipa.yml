@@ -64,7 +64,7 @@ jobs:
           echo "Building with MARKETING_VERSION=$VER CURRENT_PROJECT_VERSION=$BUILD"
           echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
           echo "VERSION_LABEL=$VER" >> "$GITHUB_ENV"
-echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
+            echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
             # Force-fix KugouPlaybackView.swift before build
             curl -fsSL "https://raw.githubusercontent.com/zhangwenwei44/-11/main/Beans/KugouPlaybackView.swift" -o Beans/KugouPlaybackView.swift || true
             echo "Lines 48-52 before build:"

@@ -6324,6 +6324,7 @@ struct PlayerSettingsSheet: View {
                             dismiss()
                         }
                     }
+                    .foregroundStyle(.primary)
                 }
             }
         }
@@ -6919,6 +6920,7 @@ private struct OfficialPlaylistPickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
@@ -6927,6 +6929,7 @@ private struct OfficialPlaylistPickerSheet: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .foregroundStyle(.primary)
                     .disabled(mode != .save)
                     .opacity(mode == .save ? 1 : 0)
                     .accessibilityLabel("新建官方歌单")

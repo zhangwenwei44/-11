@@ -603,6 +603,7 @@ struct CommunityQRSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }
@@ -653,6 +654,7 @@ struct AccountHubSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }
@@ -3435,6 +3437,7 @@ struct EqualizerSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(beansLocalized("完成", "Done")) { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
             .alert(

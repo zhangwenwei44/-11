@@ -3,11 +3,11 @@ import SwiftUI
 import MediaPlayer
 import UIKit
 
-// MARK: - 酷狗风格播放页
+// MARK: - 酷狗风格播放页（沉浸式）
 //
-// 布局贴近酷狗播放器：全屏封面背景（模糊封面 + 分段压暗渐变）、
-// 中部三页横滑（封面 / 歌词 / 队列）配顶部圆点指示、
-// 底部为歌名 + 歌手标签行、功能图标行、细进度条和五键控制区。
+// 沉浸式布局贴近酷狗新版播放器：封面全屏铺底，顶部轻压暗保证顶栏可读，
+// 中下部由亮纱渐变（深色模式为暗纱）承载信息与控件，文字转为墨水色；
+// 中部三页横滑（封面 / 歌词 / 队列）配顶部圆点指示，歌词与队列压在亮纱之上。
 
 struct KugouPlaybackView: View {
     @EnvironmentObject private var theme: ThemeStore
@@ -39,6 +39,16 @@ struct KugouPlaybackView: View {
         case cover
         case lyrics
         case queue
+    }
+
+    // MARK: 沉浸式配色（浅色模式 = 白纱黑字，深色模式 = 黑纱白字）
+
+    private var veilColor: Color { colorScheme == .dark ? .black : .white }
+    private var inkPrimary: Color { colorScheme == .dark ? .white : .black }
+    private var inkSecondary: Color { colorScheme == .dark ? .white.opacity(0.62) : .black.opacity(0.56) }
+    private var inkFaint: Color { colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.38) }
+    private var queuePalette: CompactQueuePalette {
+        colorScheme == .dark ? .onDarkArtwork : .onLightVeil
     }
 
     private var coverURL: URL? {
@@ -85,7 +95,6 @@ struct KugouPlaybackView: View {
 
                     bottomPanel
                 }
-                .foregroundStyle(.white)
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
@@ -103,7 +112,7 @@ struct KugouPlaybackView: View {
         }
     }
 
-    // MARK: - 背景
+    // MARK: - 背景（沉浸式：顶部压暗 + 中下部亮纱）
 
     private var backdrop: some View {
         ZStack {
@@ -125,15 +134,29 @@ struct KugouPlaybackView: View {
                 .transition(.opacity)
             }
 
-            // 顶部状态栏可读 + 中部露出封面 + 底部信息区压暗
+            // 顶部轻压暗：状态栏与顶栏白色元素在任何封面上都可读
             LinearGradient(
                 stops: [
-                    .init(color: .black.opacity(0.52), location: 0),
-                    .init(color: .black.opacity(0.24), location: 0.16),
-                    .init(color: .black.opacity(0.04), location: 0.36),
-                    .init(color: .black.opacity(0.42), location: 0.58),
-                    .init(color: .black.opacity(0.88), location: 0.74),
-                    .init(color: .black.opacity(0.97), location: 1.0)
+                    .init(color: .black.opacity(0.5), location: 0),
+                    .init(color: .black.opacity(0.30), location: 0.06),
+                    .init(color: .black.opacity(0.10), location: 0.13),
+                    .init(color: .clear, location: 0.20)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+
+            // 沉浸式亮纱：上半屏露出封面，中下部渐亮承载信息与控件
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.20),
+                    .init(color: veilColor.opacity(0.34), location: 0.28),
+                    .init(color: veilColor.opacity(0.62), location: 0.38),
+                    .init(color: veilColor.opacity(0.86), location: 0.48),
+                    .init(color: veilColor.opacity(0.92), location: 0.60),
+                    .init(color: veilColor.opacity(0.945), location: 0.78),
+                    .init(color: veilColor.opacity(0.96), location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -143,7 +166,7 @@ struct KugouPlaybackView: View {
         .allowsHitTesting(false)
     }
 
-    // MARK: - 顶部栏
+    // MARK: - 顶部栏（保持白色元素，压暗在深色顶部）
 
     private var header: some View {
         HStack(spacing: 0) {
@@ -200,7 +223,7 @@ struct KugouPlaybackView: View {
     // MARK: - 中部页面
 
     private func coverPage(size: CGSize) -> some View {
-        let artSize = min(size.width - 96, min(size.height * 0.42, 360))
+        let artSize = min(size.width - 96, min(size.height * 0.40, 340))
         return VStack(spacing: 16) {
             Spacer(minLength: 10)
 
@@ -225,11 +248,12 @@ struct KugouPlaybackView: View {
                 } label: {
                     Text(currentLyricText)
                         .font(BeansFont.appFont(14, .medium))
-                        .foregroundStyle(.white.opacity(0.78))
+                        .foregroundStyle(inkPrimary.opacity(0.85))
                         .lineLimit(1)
                         .padding(.horizontal, 18)
                         .padding(.vertical, 9)
                         .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().strokeBorder(inkPrimary.opacity(0.15), lineWidth: 1))
                 }
                 .buttonStyle(GlassPressButtonStyle())
             }
@@ -239,70 +263,99 @@ struct KugouPlaybackView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    // 歌词整体压到中下部：当前行落在亮纱上，深色墨水可读
     private var lyricsPage: some View {
-        Group {
-            if lyrics.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "music.note")
-                        .font(.system(size: 34, weight: .light))
-                        .foregroundStyle(.white.opacity(0.5))
-                    Text("暂无歌词")
-                        .font(BeansFont.appFont(15, .medium))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                AppleMusicLyricsSection(
-                    lyrics: lyrics,
-                    primary: .white,
-                    secondary: .white.opacity(0.5),
-                    lyricOffset: CGFloat(lyricOffset)
-                ) { line in
-                    BeansHaptics.tap()
-                    player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)))
-                }
-                .padding(.horizontal, 22)
-            }
-        }
-    }
+        GeometryReader { geo in
+            VStack(spacing: 0) {
+                Color.clear.frame(height: geo.size.height * 0.26)
 
-    private var queuePage: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("播放队列")
-                    .font(BeansFont.appFont(18, .bold))
-                Spacer()
-                Menu {
-                    Button("清空队列", role: .destructive) {
-                        player.clearQueue()
+                Group {
+                    if lyrics.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "music.note")
+                                .font(.system(size: 34, weight: .light))
+                                .foregroundStyle(inkFaint)
+                            Text("暂无歌词")
+                                .font(BeansFont.appFont(15, .medium))
+                                .foregroundStyle(inkSecondary)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else {
+                        AppleMusicLyricsSection(
+                            lyrics: lyrics,
+                            primary: inkPrimary,
+                            secondary: inkSecondary,
+                            lyricOffset: CGFloat(lyricOffset)
+                        ) { line in
+                            BeansHaptics.tap()
+                            player.seekPrecisely(to: LyricTiming.seekTime(for: line, userOffset: Double(lyricOffset)))
+                        }
+                        .padding(.horizontal, 22)
+                        .frame(maxHeight: .infinity)
                     }
-                    Divider()
-                    Button("定时关闭", action: onSleepTimer)
-                    Button("添加到本地歌单", action: onAddToLocalPlaylist)
-                    Button("播放器设置", action: onPlayerSettings)
-                } label: {
-                    Image(systemName: "ellipsis")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .frame(width: 38, height: 30)
                 }
+                .frame(maxHeight: .infinity)
             }
-
-            AppleMusicCompactQueueContent()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .padding(.horizontal, 24)
-        .padding(.top, 6)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    // MARK: - 底部信息与控制
+    // 队列页局部亮纱：从封面过渡到近实色的浅色列表背景
+    private var queuePage: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .top) {
+                LinearGradient(
+                    stops: [
+                        .init(color: .clear, location: 0),
+                        .init(color: veilColor.opacity(0.40), location: 0.10),
+                        .init(color: veilColor.opacity(0.86), location: 0.22),
+                        .init(color: veilColor.opacity(0.94), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+
+                VStack(alignment: .leading, spacing: 14) {
+                    Color.clear.frame(height: geo.size.height * 0.18)
+
+                    HStack {
+                        Text("播放队列")
+                            .font(BeansFont.appFont(18, .bold))
+                            .foregroundStyle(inkPrimary)
+                        Spacer()
+                        Menu {
+                            Button("清空队列", role: .destructive) {
+                                player.clearQueue()
+                            }
+                            Divider()
+                            Button("定时关闭", action: onSleepTimer)
+                            Button("添加到本地歌单", action: onAddToLocalPlaylist)
+                            Button("播放器设置", action: onPlayerSettings)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundStyle(inkPrimary.opacity(0.85))
+                                .frame(width: 38, height: 30)
+                        }
+                    }
+
+                    AppleMusicCompactQueueContent(palette: queuePalette)
+                }
+                .padding(.horizontal, 24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    // MARK: - 底部信息与控制（全部墨水色）
 
     private var bottomPanel: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(song?.name ?? "未在播放")
                     .font(BeansFont.appFont(26, .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(inkPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 if showSongVIPBadge, song?.isVIP == true {
@@ -319,7 +372,7 @@ struct KugouPlaybackView: View {
             HStack(spacing: 8) {
                 Text(song?.artists ?? "")
                     .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(inkSecondary)
                     .lineLimit(1)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -364,13 +417,13 @@ struct KugouPlaybackView: View {
             HStack(spacing: 10) {
                 Text(beansTimeString(clock.progress))
                     .frame(minWidth: 34, alignment: .leading)
-                SeekBar(accent: .white, track: .white.opacity(0.32))
+                SeekBar(accent: inkPrimary, track: inkPrimary.opacity(0.24))
                     .frame(height: 22)
                 Text(beansTimeString(clock.duration))
                     .frame(minWidth: 34, alignment: .trailing)
             }
             .font(BeansFont.appFont(11, .regular, .monospaced))
-            .foregroundStyle(.white.opacity(0.72))
+            .foregroundStyle(inkSecondary)
             .padding(.top, 8)
 
             HStack(spacing: 0) {
@@ -401,11 +454,11 @@ struct KugouPlaybackView: View {
         } label: {
             Text(title)
                 .font(BeansFont.appFont(11, .medium))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(inkPrimary.opacity(0.8))
                 .lineLimit(1)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .overlay(Capsule().strokeBorder(.white.opacity(0.38), lineWidth: 1))
+                .overlay(Capsule().strokeBorder(inkPrimary.opacity(0.32), lineWidth: 1))
         }
         .buttonStyle(GlassPressButtonStyle())
     }
@@ -415,7 +468,7 @@ struct KugouPlaybackView: View {
             BeansHaptics.tap()
             onFavorite()
         } label: {
-            FavoriteHeartView(mark: favoriteMark, size: 22, inactiveColor: .white.opacity(0.88))
+            FavoriteHeartView(mark: favoriteMark, size: 22, inactiveColor: inkPrimary.opacity(0.85))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -429,7 +482,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: name)
                 .font(.system(size: 21, weight: .regular))
-                .foregroundStyle(active ? Color.beansAmber : .white.opacity(0.88))
+                .foregroundStyle(active ? Color.beansAmber : inkPrimary.opacity(0.86))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -445,7 +498,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 21, weight: .semibold))
-                .foregroundStyle(.white.opacity(0.88))
+                .foregroundStyle(inkPrimary.opacity(0.86))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -464,7 +517,7 @@ struct KugouPlaybackView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
-            .foregroundStyle(.white.opacity(0.85))
+            .foregroundStyle(inkPrimary.opacity(0.82))
             .frame(width: 56, height: 44)
         }
         .buttonStyle(GlassPressButtonStyle())
@@ -477,7 +530,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(inkPrimary)
                 .frame(width: 54, height: 54)
         }
         .buttonStyle(GlassPressButtonStyle())
@@ -494,12 +547,12 @@ struct KugouPlaybackView: View {
                 Circle()
                     .fill(.ultraThinMaterial)
                 Circle()
-                    .fill(.white.opacity(0.12))
+                    .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.5))
                 Circle()
-                    .strokeBorder(.white.opacity(0.45), lineWidth: 1)
+                    .strokeBorder(inkPrimary.opacity(colorScheme == .dark ? 0.45 : 0.18), lineWidth: 1)
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 25, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(inkPrimary)
                     .offset(x: player.isPlaying ? 0 : 1.5)
             }
             .frame(width: 66, height: 66)
@@ -521,7 +574,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: "list.bullet")
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(pageIndex == Page.queue.rawValue ? Color.beansAmber : .white.opacity(0.85))
+                .foregroundStyle(pageIndex == Page.queue.rawValue ? Color.beansAmber : inkPrimary.opacity(0.85))
                 .frame(width: 56, height: 44)
         }
         .buttonStyle(GlassPressButtonStyle())

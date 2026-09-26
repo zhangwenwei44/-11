@@ -894,8 +894,39 @@ struct AppleMusicPlaybackControls: View {
 
 }
 
+/// 队列内容配色：暗色背景使用默认白色系，亮色沉浸背景传入深色墨水系。
+struct CompactQueuePalette {
+    var title: Color = .white
+    var subtitle: Color = .white.opacity(0.46)
+    var placeholder: Color = .white.opacity(0.5)
+    var chipActiveLabel: Color = .black.opacity(0.76)
+    var chipActiveFill: Color = .white.opacity(0.66)
+    var chipLabel: Color = .white.opacity(0.76)
+    var chipFill: Color = .white.opacity(0.1)
+    var rowTitle: Color = .white.opacity(0.9)
+    var rowSubtitle: Color = .white.opacity(0.48)
+    var rowDuration: Color = .white.opacity(0.36)
+
+    static let onDarkArtwork = CompactQueuePalette()
+
+    static let onLightVeil = CompactQueuePalette(
+        title: .black.opacity(0.9),
+        subtitle: .black.opacity(0.5),
+        placeholder: .black.opacity(0.42),
+        chipActiveLabel: .white.opacity(0.95),
+        chipActiveFill: .black.opacity(0.82),
+        chipLabel: .black.opacity(0.6),
+        chipFill: .black.opacity(0.08),
+        rowTitle: .black.opacity(0.88),
+        rowSubtitle: .black.opacity(0.46),
+        rowDuration: .black.opacity(0.35)
+    )
+}
+
 struct AppleMusicCompactQueueContent: View {
     @EnvironmentObject private var player: PlayerManager
+
+    var palette: CompactQueuePalette = .onDarkArtwork
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -930,11 +961,11 @@ struct AppleMusicCompactQueueContent: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("继续播放")
                     .font(BeansFont.appFont(20, .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(palette.title)
                 Spacer()
                 Text("\(player.upcomingQueue.count) 首")
                     .font(BeansFont.appFont(12, .regular, .monospaced))
-                    .foregroundStyle(.white.opacity(0.46))
+                    .foregroundStyle(palette.subtitle)
             }
 
             if player.upcomingQueue.isEmpty {
@@ -944,13 +975,13 @@ struct AppleMusicCompactQueueContent: View {
                     Text("播放队列是空的")
                         .font(BeansFont.appFont(14, .semibold))
                 }
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(palette.placeholder)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 4) {
                         ForEach(Array(player.upcomingQueue.prefix(100)), id: \.index) { item in
-                            AppleMusicCompactQueueRow(index: item.index, song: item.song)
+                            AppleMusicCompactQueueRow(index: item.index, song: item.song, palette: palette)
                         }
                     }
                 }
@@ -977,10 +1008,10 @@ struct AppleMusicCompactQueueContent: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: 17, weight: .semibold))
-                .foregroundStyle(isActive ? Color.black.opacity(0.76) : .white.opacity(0.76))
+                .foregroundStyle(isActive ? palette.chipActiveLabel : palette.chipLabel)
                 .frame(maxWidth: .infinity, minHeight: 42)
                 .background(
-                    isActive ? AnyShapeStyle(.white.opacity(0.66)) : AnyShapeStyle(.white.opacity(0.1)),
+                    isActive ? AnyShapeStyle(palette.chipActiveFill) : AnyShapeStyle(palette.chipFill),
                     in: Capsule()
                 )
         }
@@ -1001,6 +1032,7 @@ private struct AppleMusicCompactQueueRow: View {
 
     let index: Int
     let song: Song
+    var palette: CompactQueuePalette = .onDarkArtwork
 
     var body: some View {
         Button {
@@ -1013,11 +1045,11 @@ private struct AppleMusicCompactQueueRow: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(song.name)
                         .font(BeansFont.appFont(14, .semibold))
-                        .foregroundStyle(.white.opacity(0.9))
+                        .foregroundStyle(palette.rowTitle)
                         .lineLimit(1)
                     Text(song.artists)
                         .font(BeansFont.appFont(12))
-                        .foregroundStyle(.white.opacity(0.48))
+                        .foregroundStyle(palette.rowSubtitle)
                         .lineLimit(1)
                 }
 
@@ -1025,7 +1057,7 @@ private struct AppleMusicCompactQueueRow: View {
 
                 Text(song.formattedDuration)
                     .font(BeansFont.appFont(11, .regular, .monospaced))
-                    .foregroundStyle(.white.opacity(0.36))
+                    .foregroundStyle(palette.rowDuration)
             }
             .padding(.vertical, 4)
             .contentShape(Rectangle())

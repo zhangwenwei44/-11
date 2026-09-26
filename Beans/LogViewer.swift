@@ -86,6 +86,7 @@ struct LogViewerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -108,6 +109,7 @@ struct LogViewerSheet: View {
                         }
                     } label: {
                         Image(systemName: "square.and.arrow.up")
+                            .foregroundStyle(.primary)
                     }
                 }
             }

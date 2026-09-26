@@ -44,6 +44,7 @@ struct QueueView: View {
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(.primary)
                     }
                 }
             }

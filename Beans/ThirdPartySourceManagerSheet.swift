@@ -35,6 +35,7 @@ struct ThirdPartySourceManagerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(beansLocalized("完成", "Done")) { dismiss() }
+                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
@@ -42,6 +43,7 @@ struct ThirdPartySourceManagerSheet: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .foregroundStyle(.primary)
                 }
             }
         }
@@ -657,9 +659,11 @@ private struct SourceEditorSheet: View {
                         onSave(draft)
                         dismiss()
                     }
+                    .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .cancellationAction) {
                     Button(beansLocalized("取消", "Cancel")) { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }

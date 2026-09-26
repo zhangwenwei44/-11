@@ -35,6 +35,7 @@ struct HistoryView: View {
                         Button("清空") {
                             player.clearHistory()
                         }
+                        .foregroundStyle(.primary)
                     }
                 }
             }

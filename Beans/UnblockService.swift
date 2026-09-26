@@ -45,7 +45,7 @@ enum UnblockService {
     private static var persistentCacheLoaded = false
 
     /// 入口：并发尝试用户导入且可用于当前平台的音源，返回第一个可用地址。
-    /// 用户导入的脚本音源在当前平台没有可用地址时，可继续尝试其它已声明的平台。
+    /// 只保留酷狗平台解析，其它平台（网易/QQ/酷我/咪咕）的跨平台兜底已移除。
     static func resolve(
         name: String,
         artists: String,
@@ -115,10 +115,8 @@ enum UnblockService {
     }
 
     private static func sourceCandidates(for primary: SongSource, includeFallbacks: Bool) -> [SongSource] {
-        guard includeFallbacks else { return [primary] }
-        return [primary, .netease, .qq, .kugou, .kuwo, .migu].reduce(into: []) { result, item in
-            if !result.contains(item) { result.append(item) }
-        }
+        // 第三方解析只保留酷狗（kg），其余平台一律不再尝试。
+        return [.kugou]
     }
 
     private static func resolutionCacheKey(

@@ -632,12 +632,13 @@ final class BeansLXScriptRuntime {
         guard event == "inited" else { return }
         guard let dictionary = stringKeyedDictionary(from: payload),
               let sources = stringKeyedDictionary(from: dictionary["sources"]) else { return }
+        // 第三方脚本只保留酷狗（kg）能力，其余平台直接丢弃。
         capabilities = sources.reduce(into: [:]) { result, pair in
-            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            guard pair.key == "kg", let source = stringKeyedDictionary(from: pair.value) else { return }
             result[pair.key] = stringArray(from: source["actions"])
         }
         qualityCapabilities = sources.reduce(into: [:]) { result, pair in
-            guard let source = stringKeyedDictionary(from: pair.value) else { return }
+            guard pair.key == "kg", let source = stringKeyedDictionary(from: pair.value) else { return }
             result[pair.key] = stringArray(from: source["qualitys"] ?? source["qualities"])
         }
         BeansLogger.shared.log("第三方脚本初始化：\(sourceID) sources=\(capabilities.keys.sorted().joined(separator: ","))", level: .debug)
@@ -883,6 +884,11 @@ final class LXScriptSourceRunner {
         quality: String,
         excludedHosts: Set<String>
     ) -> UnblockService.Resolved? {
+        // 第三方脚本只服务酷狗（kg），其它平台调用直接跳过，避免 12 秒超时等待。
+        guard songSource == .kugou else {
+            BeansLogger.shared.log("第三方脚本仅支持酷狗，跳过平台：\(providerCode(for: songSource))", level: .debug)
+            return nil
+        }
         let runtime = runtime(for: source, script: script)
         let payload: [String: Any] = [
             "action": "musicUrl",

@@ -275,6 +275,7 @@ private struct LocalPlaylistOrderSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }
@@ -319,9 +320,11 @@ fileprivate struct SyncPlatformPicker: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消", action: onCancel)
+                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("开始同步", action: onConfirm)
+                        .foregroundStyle(.primary)
                         .disabled(!canConfirm)
                 }
             }
@@ -453,6 +456,7 @@ struct LocalPlaylistDetailSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -513,6 +517,7 @@ struct LocalPlaylistDetailSheet: View {
                     } label: {
                         Image(systemName: "ellipsis.circle")
                             .font(.system(size: 17, weight: .semibold))
+                            .foregroundStyle(.primary)
                     }
                 }
             }
@@ -726,6 +731,7 @@ struct LocalSearchAddSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }
@@ -857,6 +863,7 @@ struct AddToLocalPlaylistSheet: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }

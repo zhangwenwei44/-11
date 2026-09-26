@@ -135,6 +135,8 @@ final class PlayerManager: NSObject, ObservableObject {
     private var audioSessionWatchdogTimer: Timer?
     private var shouldResumeAfterAudioLoss = false
     private var audioLossInProgress = false
+    /// 耳机类设备断开导致的暂停时间；重连后短窗口内自动恢复，抵御蓝牙瞬断。
+    private var pausedByRouteRemovalAt: Date?
     private var lastNowPlayingRefreshUptime = 0.0
     private var lastPublishedProgress: Double = -1
     private var lastPersistedProgress: Double = -1
@@ -378,11 +380,13 @@ final class PlayerManager: NSObject, ObservableObject {
             flushListeningDuration()
             resetListeningProgress()
             stopAudioSessionWatchdog()
+            BeansLogger.shared.log("手动暂停", level: .debug)
         } else {
             clearAudioRecoveryIntent()
             player.playImmediately(atRate: Float(rate))
             isPlaying = true
             startAudioSessionWatchdogIfNeeded()
+            BeansLogger.shared.log("手动播放", level: .debug)
         }
         savePersistedPlaybackState()
         updateNowPlaying()
@@ -613,6 +617,7 @@ final class PlayerManager: NSObject, ObservableObject {
             orderPosition = (orderPosition + 1) % playOrder.count
             currentIndex = playOrder[orderPosition]
         default:
+            guard !queue.isEmpty else { return }
             currentIndex = (currentIndex + 1) % queue.count
             orderPosition = currentIndex
         }
@@ -1291,7 +1296,9 @@ final class PlayerManager: NSObject, ObservableObject {
             if self.playMode == .repeatOne {
                 self.restartCurrent()
             } else if self.playMode == .sequential,
+                      self.queue.count > 1,
                       self.currentIndex >= self.queue.count - 1 {
+                BeansLogger.shared.log("顺序播放到最后一首，停止播放", level: .debug)
                 self.isPlaying = false
                 self.stopAudioSessionWatchdog()
                 self.updateNowPlaying()
@@ -1844,11 +1851,30 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         sessionConfigured = false
+        let reason = routeChangeReason(notification)
         // 耳机拔出 / 蓝牙耳机关机（耳机类输出设备被移除）时按系统惯例暂停，
-        // 并清除自动恢复意图，避免音乐改由扬声器继续外放。
-        if routeChangeReason(notification) == .oldDeviceUnavailable, removedOutputDeviceIsHeadphones(notification) {
-            pausePlayback()
-            savePersistedPlaybackState()
+        // 避免音乐改由扬声器继续外放；同时记录时间，供瞬断重连后恢复。
+        if reason == .oldDeviceUnavailable, removedOutputDeviceIsHeadphones(notification) {
+            if isPlaying || player?.timeControlStatus == .playing || player?.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+                pausePlayback()
+                savePersistedPlaybackState()
+                pausedByRouteRemovalAt = Date()
+                BeansLogger.shared.log("路由变化：耳机断开，暂停播放", level: .debug)
+            } else if shouldResumeAfterAudioLoss || interruptionInProgress {
+                // 已暂停但仍有待恢复意图：耳机已没了，取消恢复，避免改由扬声器续播。
+                clearAudioRecoveryIntent()
+            }
+            return
+        }
+        // 蓝牙耳机瞬断后重连（分歌/流切换间隙常见）：恢复刚才由断开引发的暂停。
+        if reason == .newDeviceAvailable,
+           currentOutputIsHeadphones(),
+           let pausedAt = pausedByRouteRemovalAt,
+           Date().timeIntervalSince(pausedAt) <= 8 {
+            pausedByRouteRemovalAt = nil
+            shouldResumeAfterAudioLoss = true
+            BeansLogger.shared.log("路由变化：耳机重连，恢复播放", level: .debug)
+            scheduleAudioRecovery(reason: "耳机重连", delay: 0.1)
             return
         }
         if isPlaying || player?.timeControlStatus == .playing {
@@ -1857,6 +1883,13 @@ final class PlayerManager: NSObject, ObservableObject {
         if shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing {
             scheduleAudioRecovery(reason: "音频路由变化", delay: 0.12)
         }
+    }
+
+    private static let headphonePortTypes: Set<AVAudioSession.Port> = [.headphones, .bluetoothHFP, .bluetoothA2DP, .bluetoothLE, .airPlay]
+
+    /// 当前会话输出是否为耳机类设备。
+    private func currentOutputIsHeadphones() -> Bool {
+        AVAudioSession.sharedInstance().currentRoute.outputs.contains { Self.headphonePortTypes.contains($0.portType) }
     }
 
     private func routeChangeReason(_ notification: Notification) -> AVAudioSession.RouteChangeReason? {
@@ -1872,10 +1905,10 @@ final class PlayerManager: NSObject, ObservableObject {
     /// 被移除的上一输出是否为耳机类设备（有线耳机 / 蓝牙 / AirPlay）。
     private func removedOutputDeviceIsHeadphones(_ notification: Notification) -> Bool {
         guard let previous = notification.userInfo?[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription else {
-            return true
+            // 无法确认上一路由时不暂停，沿用原有的恢复逻辑，避免误伤播放。
+            return false
         }
-        let headphoneTypes: Set<AVAudioSession.Port> = [.headphones, .bluetoothHFP, .bluetoothA2DP, .bluetoothLE, .airPlay]
-        return previous.outputs.contains { headphoneTypes.contains($0.portType) }
+        return previous.outputs.contains { Self.headphonePortTypes.contains($0.portType) }
     }
 
     // MARK: - 来电/中断处理
@@ -1942,6 +1975,7 @@ final class PlayerManager: NSObject, ObservableObject {
         guard let type = AVAudioSession.InterruptionType(rawValue: rawType) else { return }
         switch type {
         case .began:
+            BeansLogger.shared.log("音频中断开始", level: .debug)
             interruptionResumeWorkItem?.cancel()
             interruptionResumeWorkItem = nil
             interruptionInProgress = true
@@ -1958,6 +1992,7 @@ final class PlayerManager: NSObject, ObservableObject {
                 refreshNowPlayingOwnership()
             }
         case .ended:
+            BeansLogger.shared.log("音频中断结束", level: .debug)
             sessionConfigured = false
             guard interruptionInProgress || shouldResumeAfterAudioLoss else { return }
             scheduleAudioRecovery(reason: "系统音频中断结束", delay: 0.18)
@@ -2047,6 +2082,7 @@ final class PlayerManager: NSObject, ObservableObject {
         audioLossInProgress = false
         interruptionInProgress = false
         wasPlayingBeforeInterruption = false
+        pausedByRouteRemovalAt = nil
         audioRecoveryWorkItem?.cancel()
         audioRecoveryWorkItem = nil
         interruptionResumeWorkItem?.cancel()

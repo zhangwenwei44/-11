@@ -2185,6 +2185,7 @@ struct DailySongsSheet: View {
                     } label: {
                         Image(systemName: isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
                     }
+                    .foregroundStyle(.primary)
                     .disabled(isRefreshing)
                     .accessibilityLabel(Text("刷新每日推荐"))
                 }
@@ -2559,6 +2560,7 @@ private struct HomeUnifiedSearchSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("关闭") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }

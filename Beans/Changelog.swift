@@ -146,6 +146,7 @@ struct ChangelogListView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完成") { dismiss() }
+                        .foregroundStyle(.primary)
                 }
             }
         }

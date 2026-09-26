@@ -14,6 +14,8 @@ struct BeansApp: App {
     @State private var showEasterEgg = false
 
     init() {
+        // 导航栏「返回 / 完成」等按钮由系统蓝改为标签色（浅色模式为黑色，深色模式自动反白）。
+        UINavigationBar.appearance().tintColor = .label
         // 尽早安装崩溃捕获，异常/致命信号写入 Documents/BeansLogs 供导出分析。
         BeansCrashHandler.shared.install()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。

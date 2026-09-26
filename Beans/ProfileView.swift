@@ -840,6 +840,7 @@ struct SettingsView: View {
     @State private var showTabVisibilitySettings = false
     @State private var settingsSearchText = ""
     @State private var settingsContentReady = false
+    @State private var showLogViewer = false
 
     private var themeMode: BeansThemeMode {
         BeansThemeMode(rawValue: themeModeRaw) ?? .system
@@ -1203,6 +1204,10 @@ struct SettingsView: View {
             ChangelogListView()
                 .environmentObject(theme)
         }
+        .sheet(isPresented: $showLogViewer) {
+            LogViewerSheet(importedText: nil)
+                .environmentObject(theme)
+        }
         .fileExporter(
             isPresented: $showExportBackup,
             document: backupDoc,
@@ -1348,11 +1353,12 @@ struct SettingsView: View {
     private var showBackupSettings: Bool { settingsMatches("备份 恢复 导出 导入 缓存") }
     private var showChangelogSettings: Bool { settingsMatches("更新 日志 版本") }
     private var showSupportSettings: Bool { settingsMatches("帮助 声明 检查更新") }
+    private var showLogSettings: Bool { settingsMatches("运行日志 记录 调试 报错 崩溃 导出日志") }
 
     private var hasSettingsSearchResults: Bool {
         showAccountSettings || showAppearanceSettings || showPlatformSettings
             || showAudioSettings || showPlaybackSettings || showEqualizerSettings
-            || showBackupSettings || showChangelogSettings || showSupportSettings
+            || showBackupSettings || showChangelogSettings || showSupportSettings || showLogSettings
     }
 
     @ViewBuilder
@@ -1383,12 +1389,14 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var utilitySettingsGroup: some View {
-        if showBackupSettings || showChangelogSettings || showSupportSettings {
+        if showBackupSettings || showChangelogSettings || showSupportSettings || showLogSettings {
             SettingsCatalogGroup {
                 if showBackupSettings { backupSection }
-                if showBackupSettings && (showChangelogSettings || showSupportSettings) { catalogDivider }
+                if showBackupSettings && (showChangelogSettings || showSupportSettings || showLogSettings) { catalogDivider }
                 if showChangelogSettings { changelogSection }
-                if showChangelogSettings && showSupportSettings { catalogDivider }
+                if showChangelogSettings && (showSupportSettings || showLogSettings) { catalogDivider }
+                if showLogSettings { logSection }
+                if showLogSettings && showSupportSettings { catalogDivider }
                 if showSupportSettings { settingsSupportSection }
             }
         }
@@ -3048,6 +3056,23 @@ struct SettingsView: View {
             return result
         }
         return nil
+    }
+
+    private var logSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            settingsSupportButton(
+                icon: "doc.text.magnifyingglass",
+                title: "查看与导出运行日志",
+                tint: Color.beansAmber
+            ) {
+                BeansHaptics.tap()
+                showLogViewer = true
+            }
+            Text("软件运行日志与崩溃记录自动保存在本机，遇到问题请导出后发送给开发者分析。")
+                .font(BeansFont.appFont(11))
+                .foregroundStyle(Color.beansComment)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var settingsSupportSection: some View {

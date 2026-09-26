@@ -119,7 +119,7 @@ struct LogViewerSheet: View {
         }
         .modifier(BeansSheetModifier(detents: [.large], dragIndicator: true))
         .sheet(isPresented: $showShare) {
-            ShareSheet(items: [BeansLogger.shared.exportLogURL()])
+            ShareSheet(items: BeansLogger.shared.exportItems())
         }
     }
 }

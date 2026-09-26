@@ -6,7 +6,7 @@ struct UpdateChecker {
     static let releasePageURL = URL(string: "https://github.com/\(repoPath)/releases/latest")!
     private static let latestAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases/latest")!
     private static let releasesAPI = URL(string: "https://api.github.com/repos/\(repoPath)/releases?per_page=100")!
-    private static let minimumHistoryVersion = "1.6.5"
+    private static let minimumHistoryVersion = "1.0"
     private static let suppressedVersionKey = "beans.updateCheck.suppressedVersion"
 
     struct ReleaseInfo {

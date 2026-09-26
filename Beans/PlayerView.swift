@@ -146,7 +146,7 @@ struct PlayerView: View {
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
-    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
+    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.kugou.rawValue
     @AppStorage("beans.appleMusic.showVolume") private var appleShowVolume = false
     @AppStorage("beans.appleMusic.primaryHex") private var applePrimaryHex = ""
     @AppStorage("beans.appleMusic.secondaryHex") private var appleSecondaryHex = ""
@@ -663,7 +663,7 @@ struct PlayerView: View {
         let _ = theme.accent
         GeometryReader { rootGeometry in
         Group {
-            if isIPadLandscape(in: rootGeometry.size) && showLyrics && coverPlayerStyle != .record {
+            if isIPadLandscape(in: rootGeometry.size) && showLyrics && coverPlayerStyle != .record && coverPlayerStyle != .kugou {
                 iPadLandscapeLyricsView
                     .id("landscape-\(layoutRenderingStyle.rawValue)-\(rootGeometry.size.width > rootGeometry.size.height)")
             } else if coverPlayerStyle == .appleMusic {
@@ -713,6 +713,31 @@ struct PlayerView: View {
                     }
                 }
                 .contentShape(Rectangle())
+            } else if coverPlayerStyle == .kugou {
+                KugouPlaybackView(
+                    song: song,
+                    lyrics: lyrics,
+                    onClose: { closePlayer() },
+                    onFavorite: {
+                        guard let song else { return }
+                        toggleLocalFavorite(song)
+                    },
+                    onComments: {
+                        if song != nil { showComments = true }
+                    },
+                    onSleepTimer: {
+                        showSleepTimer = true
+                    },
+                    onAddToLocalPlaylist: {
+                        showAddToLocalPlaylist = true
+                    },
+                    onPlayerSettings: {
+                        openPlayerSettings()
+                    },
+                    onArtist: {
+                        openArtistHome()
+                    }
+                )
             } else if coverPlayerStyle == .record {
                 RecordPlayerView(
                     song: song,
@@ -1139,7 +1164,7 @@ struct PlayerView: View {
     private func iPadLandscapeLyricsColumn(geo: GeometryProxy) -> some View {
         Group {
             switch layoutRenderingStyle {
-            case .appleMusic:
+            case .appleMusic, .kugou:
                 AppleMusicLyricsSection(
                     lyrics: lyrics,
                     primary: landscapeApplePrimaryColor,
@@ -1265,7 +1290,7 @@ struct PlayerView: View {
     @ViewBuilder
     private var iPadLandscapeLyricsHeader: some View {
         switch layoutRenderingStyle {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             iPadLandscapeAppleMusicLyricsHeader
         case .vinyl, .record:
             iPadLandscapeVinylLyricsHeader
@@ -1525,7 +1550,7 @@ struct PlayerView: View {
     @ViewBuilder
     private func iPadLandscapeControlDeck(bottomInset: CGFloat) -> some View {
         switch layoutRenderingStyle {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             iPadLandscapeAppleMusicControlDeck(bottomInset: bottomInset)
         case .vinyl, .record, .classic:
             iPadLandscapeCompactControlDeck(bottomInset: bottomInset)
@@ -1968,7 +1993,7 @@ struct PlayerView: View {
     @ViewBuilder
     private func albumPanel(geo: GeometryProxy) -> some View {
         switch layoutRenderingStyle {
-        case .classic, .appleMusic:
+        case .classic, .appleMusic, .kugou:
             classicAlbumPanel(geo: geo)
         case .vinyl, .record:
             vinylAlbumPanel(geo: geo)
@@ -3072,7 +3097,7 @@ struct PlayerView: View {
 
     private var iPadLandscapeControlsReservedHeight: CGFloat {
         switch layoutRenderingStyle {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             return appleShowVolume ? 294 : 238
         case .vinyl:
             return 136
@@ -4289,7 +4314,7 @@ struct PlayerView: View {
             } selected: { iPadLandscapeLayoutPart == $0 }
         } else {
             switch layoutEditorStyle {
-            case .appleMusic:
+            case .appleMusic, .kugou:
                 layoutPartChips(AppleMusicLayoutPart.allCases.map { ($0.rawValue, $0) }) { part in
                     appleLayoutPart = part
                 } selected: { appleLayoutPart == $0 }
@@ -4378,7 +4403,7 @@ struct PlayerView: View {
                     )
                 }
                 switch layoutEditorStyle {
-                case .appleMusic:
+                case .appleMusic, .kugou:
                     return appleLayout.entry(for: appleLayoutPart)
                 case .vinyl, .record:
                     return vinylLayoutData[layoutPart.rawValue]
@@ -4396,7 +4421,7 @@ struct PlayerView: View {
                     return
                 }
                 switch layoutEditorStyle {
-                case .appleMusic:
+                case .appleMusic, .kugou:
                     appleLayout.set(value, for: appleLayoutPart)
                 case .vinyl, .record:
                     vinylLayoutData[layoutPart.rawValue] = value
@@ -4421,7 +4446,7 @@ struct PlayerView: View {
 
     private func selectInitialLayoutPart(for style: BeansCoverPlayerStyle) {
         switch style {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             appleLayoutPart = .cover
         case .vinyl, .record:
             layoutPart = .vinylCover
@@ -4440,7 +4465,7 @@ struct PlayerView: View {
             return
         }
         switch layoutEditorStyle {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             appleLayout.reset(appleLayoutPart)
         case .vinyl, .record:
             vinylLayoutData.removeValue(forKey: layoutPart.rawValue)
@@ -4455,7 +4480,7 @@ struct PlayerView: View {
             return
         }
         switch layoutEditorStyle {
-        case .appleMusic:
+        case .appleMusic, .kugou:
             appleLayout.resetAll()
         case .vinyl, .record:
             vinylLayoutData = [:]
@@ -4756,7 +4781,7 @@ struct PlayerView: View {
             classicStyleDebugControls
         case .vinyl, .record:
             vinylStyleDebugControls
-        case .appleMusic:
+        case .appleMusic, .kugou:
             appleMusicAppearanceControls
         }
     }
@@ -6013,7 +6038,7 @@ struct PlayerSettingsSheet: View {
     @AppStorage("beans.albumTextGradient") private var albumTextGradient = false
     @AppStorage("beans.albumTextGlow") private var albumTextGlow = false
     @AppStorage("beans.albumTextGlowIntensity") private var albumTextGlowIntensity = 1.0
-    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.appleMusic.rawValue
+    @AppStorage("beans.coverPlayerStyle") private var coverPlayerStyleRaw = BeansCoverPlayerStyle.kugou.rawValue
     @AppStorage("beans.appleMusic.showLyricPreview") private var appleShowLyricPreview = true
     @Environment(\.dismiss) private var dismiss
     @AppStorage("beans.playerSettings.playbackExpanded") private var playbackExpanded = false

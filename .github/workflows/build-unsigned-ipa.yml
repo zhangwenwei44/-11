@@ -24,8 +24,10 @@ jobs:
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 
-      - name: Resolve build number (手动构建使用 project.yml 中的值，主分支推送仍自动递增)
+      - name: Resolve build number (推送与发布构建自动递增，测试构建沿用 project.yml 中的值)
         id: bump
+        env:
+          PUBLISH_RELEASE: ${{ github.event.inputs.publish_release }}
         run: |
           python3 - <<'PYEOF'
           import re
@@ -35,7 +37,7 @@ jobs:
               content = f.read()
           def bump_build(m):
               return 'CURRENT_PROJECT_VERSION: "' + str(int(m.group(1)) + 1) + '"'
-          if os.environ.get('GITHUB_EVENT_NAME') == 'push':
+          if os.environ.get('GITHUB_EVENT_NAME') == 'push' or os.environ.get('PUBLISH_RELEASE') == 'true':
               content, n2 = re.subn(r'CURRENT_PROJECT_VERSION:\s*"(\d+)"', bump_build, content)
           with open(path, 'w') as f:
               f.write(content)
@@ -118,6 +120,7 @@ jobs:
           python3 - <<'PYEOF'
           import re
           ver = open('version.txt').read().strip()
+          build = open('build.txt').read().strip()
           tag = 'v' + ver
           yml = open('project.yml', encoding='utf-8').read()
           bid = re.search(r'PRODUCT_BUNDLE_IDENTIFIER:\s*(\S+)', yml).group(1)
@@ -145,7 +148,7 @@ jobs:
               '        <key>bundle-identifier</key>',
               '        <string>' + bid + '</string>',
               '        <key>bundle-version</key>',
-              '        <string>' + ver + '</string>',
+              '        <string>' + build + '</string>',
               '        <key>kind</key>',
               '        <string>software</string>',
               '        <key>title</key>',
@@ -206,6 +209,6 @@ jobs:
           if git diff --cached --quiet; then
             echo "no version change to commit"
           else
-            git commit -m "chore: bump build to $(cat version.txt) [skip ci]"
+            git commit -m "chore: bump build to $(cat build.txt) [skip ci]"
             git push
           fi

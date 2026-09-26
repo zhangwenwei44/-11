@@ -123,6 +123,11 @@ final class BeansLogger: ObservableObject {
         return url
     }
 
+    /// 导出项：当日运行日志 + 全部崩溃日志
+    func exportItems() -> [URL] {
+        [exportLogURL()] + BeansCrashHandler.shared.crashLogURLs()
+    }
+
     private func write(_ line: String) {
         let url = currentFileURL
         // 单日日志过大时轮转到 .1，避免无限膨胀

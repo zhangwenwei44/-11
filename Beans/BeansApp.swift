@@ -14,6 +14,8 @@ struct BeansApp: App {
     @State private var showEasterEgg = false
 
     init() {
+        // 尽早安装崩溃捕获，异常/致命信号写入 Documents/BeansLogs 供导出分析。
+        BeansCrashHandler.shared.install()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。
         UserDefaults.standard.set(false, forKey: "beans.pauseHomeRendering")
         // 新安装默认开启高刷新率；老用户保留自己手动关闭的选择。
@@ -21,7 +23,7 @@ struct BeansApp: App {
         HighRefreshKeeper.shared.configureFromDefaults()
         UserDefaults.standard.register(defaults: [
             "beans.uiStyle": BeansUIStyle.nativeClean.rawValue,
-            "beans.coverPlayerStyle": BeansCoverPlayerStyle.appleMusic.rawValue,
+            "beans.coverPlayerStyle": BeansCoverPlayerStyle.kugou.rawValue,
             "beans.appleMusic.showVolume": false,
             "beans.homeHideUsername": true,
             "beans.homeHeaderHideSort": true,

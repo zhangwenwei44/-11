@@ -1844,12 +1844,38 @@ final class PlayerManager: NSObject, ObservableObject {
             return
         }
         sessionConfigured = false
+        // 耳机拔出 / 蓝牙耳机关机（耳机类输出设备被移除）时按系统惯例暂停，
+        // 并清除自动恢复意图，避免音乐改由扬声器继续外放。
+        if routeChangeReason(notification) == .oldDeviceUnavailable, removedOutputDeviceIsHeadphones(notification) {
+            pausePlayback()
+            savePersistedPlaybackState()
+            return
+        }
         if isPlaying || player?.timeControlStatus == .playing {
             rememberAudioPlaybackIntent()
         }
         if shouldResumeAfterAudioLoss || isPlaying || player?.timeControlStatus == .playing {
             scheduleAudioRecovery(reason: "音频路由变化", delay: 0.12)
         }
+    }
+
+    private func routeChangeReason(_ notification: Notification) -> AVAudioSession.RouteChangeReason? {
+        let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey]
+        if let number = raw as? NSNumber {
+            return AVAudioSession.RouteChangeReason(rawValue: number.uintValue)
+        } else if let value = raw as? UInt {
+            return AVAudioSession.RouteChangeReason(rawValue: value)
+        }
+        return nil
+    }
+
+    /// 被移除的上一输出是否为耳机类设备（有线耳机 / 蓝牙 / AirPlay）。
+    private func removedOutputDeviceIsHeadphones(_ notification: Notification) -> Bool {
+        guard let previous = notification.userInfo?[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription else {
+            return true
+        }
+        let headphoneTypes: Set<AVAudioSession.Port> = [.headphones, .bluetoothHFP, .bluetoothA2DP, .bluetoothLE, .airPlay]
+        return previous.outputs.contains { headphoneTypes.contains($0.portType) }
     }
 
     // MARK: - 来电/中断处理

@@ -24,6 +24,9 @@ jobs:
           clean: true
           fetch-depth: 0
 
+      - name: Force clean working tree
+        run: git reset --hard HEAD && git clean -fdx
+
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
 

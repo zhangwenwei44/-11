@@ -18,17 +18,11 @@ jobs:
   build-ipa:
     runs-on: macos-26
     steps:
-      - name: Clone repo
-        shell: bash
-        run: |
-          set -e
-          rm -rf /tmp/beans-repo
-          git clone --depth 1 https://github.com/zhangwenwei44/-11.git /tmp/beans-repo
-          cp -r /tmp/beans-repo/* .
-          echo "File size:"
-          wc -l Beans/KugouPlaybackView.swift
-          echo "Lines 48-52:"
-          sed -n '48,52p' Beans/KugouPlaybackView.swift
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen
@@ -71,6 +65,10 @@ jobs:
           echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
           echo "VERSION_LABEL=$VER" >> "$GITHUB_ENV"
 echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
+            # Force-fix KugouPlaybackView.swift before build
+            curl -fsSL "https://raw.githubusercontent.com/zhangwenwei44/-11/main/Beans/KugouPlaybackView.swift" -o Beans/KugouPlaybackView.swift || true
+            echo "Lines 48-52 before build:"
+            sed -n '48,52p' Beans/KugouPlaybackView.swift
             rm -rf build
             rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
             xcodebuild \

@@ -27,11 +27,10 @@ jobs:
       - name: Verify and fix KugouPlaybackView.swift
         run: |
           echo "HEAD: $(git rev-parse HEAD)"
-          # Force-fix any stale code patterns in KugouPlaybackView.swift
-          sed -i 's/Color(red: c\.red, green: c\.green, blue: c\.blue)/Color(red: Double(r), green: Double(g), blue: Double(b))/g' Beans/KugouPlaybackView.swift
-          sed -i 's/CGFloat(tint\.red)/CGFloat(r)/g' Beans/KugouPlaybackView.swift
-          sed -i 's/geo\.width/geo.size.width/g' Beans/KugouPlaybackView.swift
-          sed -i 's/geo\.height/geo.size.height/g' Beans/KugouPlaybackView.swift
+          perl -pi -e 's/Color\(red: c\.red, green: c\.green, blue: c\.blue\)/Color(red: Double(r), green: Double(g), blue: Double(b))/g' Beans/KugouPlaybackView.swift
+          perl -pi -e 's/CGFloat\(tint\.red\)/CGFloat(r)/g' Beans/KugouPlaybackView.swift
+          perl -pi -e 's/geo\.width/geo.size.width/g' Beans/KugouPlaybackView.swift
+          perl -pi -e 's/geo\.height/geo.size.height/g' Beans/KugouPlaybackView.swift
           grep -n 'getRed\|geo\.size\|Color(red: Double' Beans/KugouPlaybackView.swift | head -5
 
       - name: Install XcodeGen

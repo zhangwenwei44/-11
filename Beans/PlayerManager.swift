@@ -2028,10 +2028,10 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     /// 混音播放时，部分应用既不发送完整中断通知，也会暂停 AVPlayer 的时间回调。
-    /// 用主线程定时器补足这条通知链，同时重新发布系统正在播放信息。
+    /// 非混音模式同样运行：锁屏/后台被系统短暂抢占时，若 interruption ended 回调丢失，
+    /// 靠这个主线程定时器把"该恢复播放"的意图补成实际恢复。
     private func startAudioSessionWatchdogIfNeeded() {
-        guard mixesWithOthers,
-              currentSong != nil,
+        guard currentSong != nil,
               audioSessionWatchdogTimer == nil else { return }
         let timer = Timer(timeInterval: 0.5, repeats: true) { [weak self] _ in
             self?.performOnMain { [weak self] in
@@ -2048,7 +2048,7 @@ final class PlayerManager: NSObject, ObservableObject {
     }
 
     private func handleAudioSessionWatchdogTick() {
-        guard mixesWithOthers, currentSong != nil else {
+        guard currentSong != nil else {
             stopAudioSessionWatchdog()
             return
         }
@@ -2061,18 +2061,33 @@ final class PlayerManager: NSObject, ObservableObject {
         let playerIsPlaying = currentPlayer.timeControlStatus == .playing
         let playerIsPaused = currentPlayer.timeControlStatus == .paused
 
-        if playerIsPaused, itemReady, (!interruptionInProgress || mixesWithOthers) {
-            if !shouldResumeAfterAudioLoss {
-                rememberAudioPlaybackIntent()
-            }
-            if isPlaying {
-                isPlaying = false
-                refreshNowPlayingOwnership()
+        if playerIsPaused, itemReady {
+            if mixesWithOthers {
+                if !interruptionInProgress {
+                    if !shouldResumeAfterAudioLoss {
+                        rememberAudioPlaybackIntent()
+                    }
+                    if isPlaying {
+                        isPlaying = false
+                        refreshNowPlayingOwnership()
+                    }
+                }
+            } else if isPlaying || interruptionInProgress {
+                // 普通模式：AVPlayer 被系统暂停但 app 仍认为在播（锁屏/后台被抢占、
+                // 中断 ended 回调丢失），标记恢复意图，交给下面的恢复块续播；
+                // 用户手动暂停 isPlaying 已为 false，不会被强制续播。
+                if !shouldResumeAfterAudioLoss {
+                    rememberAudioPlaybackIntent()
+                }
+                if isPlaying {
+                    isPlaying = false
+                    refreshNowPlayingOwnership()
+                }
             }
         }
 
         let session = AVAudioSession.sharedInstance()
-        if !session.categoryOptions.contains(.mixWithOthers) {
+        if mixesWithOthers, !session.categoryOptions.contains(.mixWithOthers) {
             sessionConfigured = Self.applyAudioMixPreference(true)
         }
         let otherAudioIsActive = session.isOtherAudioPlaying || session.secondaryAudioShouldBeSilencedHint
@@ -2380,9 +2395,8 @@ final class PlayerManager: NSObject, ObservableObject {
         configureAudioSession()
         if enabled, isPlaying || player?.timeControlStatus == .playing {
             startAudioSessionWatchdogIfNeeded()
-        } else if !enabled {
-            stopAudioSessionWatchdog()
         }
+        // 关闭混音不再停 watchdog：普通播放同样需要它兜底恢复锁屏/后台被抢占的播放。
         updateNowPlaying()
     }
 

@@ -252,7 +252,7 @@ struct SearchView: View {
     @AppStorage("beans.uiStyle") private var uiStyleRaw = BeansUIStyle.liquid.rawValue
 
     @State private var keyword = ""
-    @State private var provider: SearchCatalogProvider = .aggregate
+    @State private var provider: SearchCatalogProvider = .kugou
     /// 搜索平台是页面内状态；保留进入搜索前的首页平台，避免搜索筛选意外影响首页。
     @State private var homeSourceSnapshot = UserDefaults.standard.string(forKey: "beans.homeSource") ?? SearchProvider.kugou.rawValue
     private var searchProviders: [SearchCatalogProvider] { SearchCatalogProvider.allCases }
@@ -470,7 +470,6 @@ struct SearchView: View {
             hotSection
         } else {
             VStack(spacing: 0) {
-                resultProviderPicker
                 typeTabs
                 resultsArea
             }
@@ -486,7 +485,6 @@ struct SearchView: View {
             hotSection
         } else {
             VStack(spacing: 0) {
-                resultProviderPicker
                 typeTabs
                 resultsArea
             }
@@ -539,61 +537,6 @@ struct SearchView: View {
         UserDefaults.standard.set(homeSourceSnapshot, forKey: "beans.homeSource")
     }
 
-    // MARK: - 搜索结果平台选择
-
-    private var resultProviderPicker: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("搜索平台")
-                    .font(BeansFont.appFont(13, .medium))
-                    .foregroundStyle(Color.beansComment)
-                Spacer(minLength: 0)
-                Text(provider.rawValue)
-                    .font(BeansFont.appFont(12, .semibold))
-                    .foregroundStyle(Color.beansAmber)
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(searchProviders) { candidate in
-                        providerButton(candidate)
-                    }
-                }
-                .padding(.vertical, 1)
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 12)
-    }
-
-    private func providerButton(_ candidate: SearchCatalogProvider) -> some View {
-        Button {
-            BeansHaptics.tap()
-            guard provider != candidate else { return }
-            provider = candidate
-        } label: {
-            HStack(spacing: 5) {
-                if provider == candidate {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 10, weight: .bold))
-                }
-                Text(LocalizedStringKey(candidate.rawValue))
-            }
-                .font(BeansFont.appFont(13, .semibold))
-                .foregroundStyle(provider == candidate ? Color.white : Color.beansLabel)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 9)
-                .background {
-                    if provider == candidate {
-                        Capsule().fill(Color.beansAmber)
-                    } else {
-                        BeansGlass(shape: Capsule(), forceLiquid: true)
-                    }
-                }
-        }
-        .buttonStyle(.plain)
-        .frame(minHeight: 40)
-    }
-
     // MARK: - 分类选择（歌曲 / 歌手 / 专辑）
 
     private var typeTabs: some View {
@@ -642,7 +585,7 @@ struct SearchView: View {
                 Text("搜索歌曲、歌手、专辑或歌单")
                     .font(BeansFont.appFont(18, .semibold))
                     .foregroundStyle(Color.beansLabel)
-                Text("使用搜索框开始，聚合搜索也可以切换到单个平台。")
+                Text("使用搜索框开始，仅搜索酷狗音乐。")
                     .font(BeansFont.appFont(13))
                     .foregroundStyle(Color.beansComment)
                     .multilineTextAlignment(.center)
@@ -1482,7 +1425,7 @@ struct SearchView: View {
     ) async -> [Song] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.kugou, .kuwo, .migu]
+            let providers: [SearchCatalogProvider] = [.kugou]
             let completedResults = await withTaskGroup(of: [Song].self, returning: [[Song]].self) { group in
                 for candidate in providers {
                     group.addTask {
@@ -1506,7 +1449,7 @@ struct SearchView: View {
     private func catalogArtists(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Artist] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.kugou, .kuwo, .migu]
+            let providers: [SearchCatalogProvider] = [.kugou]
             let groups = await withTaskGroup(of: [Artist].self, returning: [[Artist]].self) { group in
                 for candidate in providers {
                     group.addTask { await self.catalogArtists(keyword: keyword, provider: candidate, limit: limit) }
@@ -1531,7 +1474,7 @@ struct SearchView: View {
     private func catalogAlbums(keyword: String, provider: SearchCatalogProvider, limit: Int) async -> [Album] {
         switch provider {
         case .aggregate:
-            let providers: [SearchCatalogProvider] = [.kugou, .kuwo, .migu]
+            let providers: [SearchCatalogProvider] = [.kugou]
             let groups = await withTaskGroup(of: [Album].self, returning: [[Album]].self) { group in
                 for candidate in providers {
                     group.addTask { await self.catalogAlbums(keyword: keyword, provider: candidate, limit: limit) }
@@ -1701,6 +1644,7 @@ struct AlbumDetailView: View {
     @State private var isLoading = true
     @State private var errorMessage: String?
     @State private var selectedOtherAlbum: Album?
+    @ObservedObject private var albumFavorites = AlbumFavoritesStore.shared
 
     var body: some View {
         Group {
@@ -1750,6 +1694,20 @@ struct AlbumDetailView: View {
                                 GlassButton(title: "播放全部", systemName: "play.fill", prominent: true) {
                                     player.play(songs: tracks, startAt: 0)
                                 }
+                                // 专辑收藏按钮（收藏后可在「歌单」页查看）
+                                let isFavorited = albumFavorites.contains(album)
+                                Button {
+                                    BeansHaptics.tap()
+                                    albumFavorites.toggle(album)
+                                } label: {
+                                    Image(systemName: isFavorited ? "heart.fill" : "heart")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundStyle(isFavorited ? Color(red: 0.95, green: 0.30, blue: 0.32) : Color.beansLabel)
+                                        .frame(width: 44, height: 44)
+                                        .background { BeansGlass(shape: Circle(), forceLiquid: true) }
+                                }
+                                .buttonStyle(GlassPressButtonStyle())
+                                .accessibilityLabel(isFavorited ? "取消收藏专辑" : "收藏专辑")
                             }
                         }
                     }

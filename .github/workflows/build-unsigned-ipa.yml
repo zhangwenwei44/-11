@@ -24,14 +24,21 @@ jobs:
           fetch-depth: 0
           clean: true
 
-      - name: Verify and fix KugouPlaybackView.swift
+      - name: Force refresh KugouPlaybackView.swift
         run: |
-          echo "HEAD: $(git rev-parse HEAD)"
-          perl -pi -e 's/Color\(red: c\.red, green: c\.green, blue: c\.blue\)/Color(red: Double(r), green: Double(g), blue: Double(b))/g' Beans/KugouPlaybackView.swift
-          perl -pi -e 's/CGFloat\(tint\.red\)/CGFloat(r)/g' Beans/KugouPlaybackView.swift
-          perl -pi -e 's/geo\.width/geo.size.width/g' Beans/KugouPlaybackView.swift
-          perl -pi -e 's/geo\.height/geo.size.height/g' Beans/KugouPlaybackView.swift
-          grep -n 'getRed\|geo\.size\|Color(red: Double' Beans/KugouPlaybackView.swift | head -5
+          python3 - <<'PYEOF'
+          import urllib.request
+          url = "https://api.github.com/repos/zhangwenwei44/-11/contents/Beans/KugouPlaybackView.swift?ref=main"
+          import json
+          with urllib.request.urlopen(url) as resp:
+              data = json.loads(resp.read())
+          import base64
+          content = base64.b64decode(data['content'])
+          with open('Beans/KugouPlaybackView.swift', 'wb') as f:
+              f.write(content)
+          print("Downloaded", len(content), "bytes")
+          PYEOF
+          head -3 Beans/KugouPlaybackView.swift
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

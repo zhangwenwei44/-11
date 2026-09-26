@@ -64,25 +64,39 @@ jobs:
           echo "Building with MARKETING_VERSION=$VER CURRENT_PROJECT_VERSION=$BUILD"
           echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
           echo "VERSION_LABEL=$VER" >> "$GITHUB_ENV"
-            echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
-            # Force-fix KugouPlaybackView.swift before build
-            curl -fsSL "https://raw.githubusercontent.com/zhangwenwei44/-11/main/Beans/KugouPlaybackView.swift" -o Beans/KugouPlaybackView.swift || true
-            echo "Lines 48-52 before build:"
-            sed -n '48,52p' Beans/KugouPlaybackView.swift
-            rm -rf build
-            rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
-            xcodebuild \
-              -project Beans.xcodeproj \
-              -scheme Beans \
-              -configuration Release \
-              -sdk iphoneos \
-              -derivedDataPath build \
-              MARKETING_VERSION="$VER" \
-              CURRENT_PROJECT_VERSION="$BUILD" \
-              CODE_SIGNING_ALLOWED=NO \
-              CODE_SIGNING_REQUIRED=NO \
-              CODE_SIGN_IDENTITY="" \
-              build 2>&1 | tee xcodebuild.log
+          echo "VERSION_TAG=v$VER" >> "$GITHUB_ENV"
+          # Force-fix KugouPlaybackView.swift before build
+          if curl -fsSL "https://raw.githubusercontent.com/zhangwenwei44/-11/main/Beans/KugouPlaybackView.swift" -o Beans/KugouPlaybackView.swift 2>/dev/null; then
+            echo "Downloaded fresh KugouPlaybackView.swift via curl"
+          else
+            echo "curl failed, applying perl fixes to stale file"
+            perl -pi -e 's/Color\(red: c\.red, green: c\.green, blue: c\.blue\)/Color(red: Double(r), green: Double(g), blue: Double(b))/g' Beans/KugouPlaybackView.swift
+            perl -pi -e 's/CGFloat\(tint\.red\)/CGFloat(r)/g' Beans/KugouPlaybackView.swift
+            perl -pi -e 's/geo\.width/geo.size.width/g' Beans/KugouPlaybackView.swift
+            perl -pi -e 's/geo\.height/geo.size.height/g' Beans/KugouPlaybackView.swift
+          fi
+          # Verify the file has correct patterns
+          if grep -q "c\.red\|geo\.width\|geo\.height" Beans/KugouPlaybackView.swift; then
+            echo "ERROR: KugouPlaybackView.swift still has stale patterns!"
+            exit 1
+          fi
+          echo "File verified - contains correct patterns"
+          echo "Lines 48-52 before build:"
+          sed -n '48,52p' Beans/KugouPlaybackView.swift
+          rm -rf build
+          rm -rf ~/Library/Developer/Xcode/DerivedData/ModuleCache.noindex
+          xcodebuild \
+            -project Beans.xcodeproj \
+            -scheme Beans \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            MARKETING_VERSION="$VER" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build 2>&1 | tee xcodebuild.log
 
       - name: Commit build errors on failure
         if: failure()

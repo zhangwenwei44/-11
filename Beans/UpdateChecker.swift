@@ -18,6 +18,8 @@ struct UpdateChecker {
         let notesTextColorHex: String?
         /// Release 中 manifest.plist 的地址；用于应用内直接推送安装包。
         let manifestURL: URL?
+        /// 直接 IPA 下载地址（当 itms-services 因签名冲突失败时使用）。
+        let ipaURL: URL?
 
         /// itms-services 安装链接：点击后系统直接下载并安装 ipa（越狱设备需 AppSync）。
         var installURL: URL? {
@@ -59,11 +61,14 @@ struct UpdateChecker {
 
     /// 应用内直接推送安装包：优先走 itms-services 系统安装，失败时退回 Release 页面。
     static func openInstall(_ info: ReleaseInfo) {
-        guard let url = info.installURL else {
+        // 优先 itms-services；若因签名冲突提示"已安装"，改用直接 IPA 下载（Filza/AppSync 安装场景）
+        if let url = info.installURL {
+            UIApplication.shared.open(url)
+        } else if let url = info.ipaURL {
+            UIApplication.shared.open(url)
+        } else {
             UIApplication.shared.open(info.htmlURL)
-            return
         }
-        UIApplication.shared.open(url)
     }
 
     static func fetchLatest() async throws -> ReleaseInfo {
@@ -85,6 +90,9 @@ struct UpdateChecker {
         let manifestAsset = assets?.first { ($0["name"] as? String) == "manifest.plist" }
         let manifestURL = (manifestAsset?["browser_download_url"] as? String).flatMap(URL.init(string:))
             ?? URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/manifest.plist")
+        let ipaAsset = assets?.first { ($0["name"] as? String) == "Beans-unsigned.ipa" }
+        let ipaURL = (ipaAsset?["browser_download_url"] as? String).flatMap(URL.init(string:))
+            ?? URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/Beans-unsigned.ipa")
         return ReleaseInfo(
             version: version,
             name: json["name"] as? String ?? tag,
@@ -92,7 +100,8 @@ struct UpdateChecker {
             htmlURL: url,
             notesImageURL: nil,
             notesTextColorHex: nil,
-            manifestURL: manifestURL
+            manifestURL: manifestURL,
+            ipaURL: ipaURL
         )
     }
 
@@ -124,7 +133,8 @@ struct UpdateChecker {
                 htmlURL: htmlURL,
                 notesImageURL: nil,
                 notesTextColorHex: nil,
-                manifestURL: URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/manifest.plist")
+                manifestURL: URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/manifest.plist"),
+                ipaURL: URL(string: "https://github.com/\(repoPath)/releases/download/\(tag)/Beans-unsigned.ipa")
             )
         }
     }

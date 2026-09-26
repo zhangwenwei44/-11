@@ -41,14 +41,26 @@ struct KugouPlaybackView: View {
         case queue
     }
 
-    // MARK: 沉浸式配色（浅色模式 = 白纱黑字，深色模式 = 黑纱白字）
+    // MARK: 沉浸式配色（跟随背景图主色）
 
     private var veilColor: Color { colorScheme == .dark ? .black : .white }
-    private var inkPrimary: Color { colorScheme == .dark ? .white : .black }
-    private var inkSecondary: Color { colorScheme == .dark ? .white.opacity(0.62) : .black.opacity(0.56) }
-    private var inkFaint: Color { colorScheme == .dark ? .white.opacity(0.4) : .black.opacity(0.38) }
+
+    private var tintColor: Color {
+        guard let c = backdropLoader.dominantColor else { return .black }
+        return Color(red: c.red, green: c.green, blue: c.blue)
+    }
+
+    private var isTintLight: Bool {
+        guard let c = backdropLoader.dominantColor else { return false }
+        return (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) > 0.55
+    }
+
+    private var adaptiveInkPrimary: Color { isTintLight ? .black : .white }
+    private var adaptiveInkSecondary: Color { isTintLight ? .black.opacity(0.56) : .white.opacity(0.62) }
+    private var adaptiveInkFaint: Color { isTintLight ? .black.opacity(0.38) : .white.opacity(0.4) }
+
     private var queuePalette: CompactQueuePalette {
-        colorScheme == .dark ? .onDarkArtwork : .onLightVeil
+        isTintLight ? .onLightVeil : .onDarkArtwork
     }
 
     private var coverURL: URL? {
@@ -112,13 +124,13 @@ struct KugouPlaybackView: View {
         }
     }
 
-    // MARK: - 背景（沉浸式：顶部压暗 + 中下部亮纱）
+    // MARK: - 背景（沉浸式：顶部压暗 + 中下部亮纱，颜色跟随背景图）
 
     private var backdrop: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // 毛玻璃封面垫底：封面未加载 / 视频封面时也有氛围背景
+            // 毛玻璃封面垫底：封面未加载时也有氛围背景
             CoverBlurBackground(url: coverURL, scheme: colorScheme)
                 .ignoresSafeArea()
 
@@ -134,7 +146,7 @@ struct KugouPlaybackView: View {
                 .transition(.opacity)
             }
 
-            // 顶部轻压暗：状态栏与顶栏白色元素在任何封面上都可读
+            // 顶部轻压暗：状态栏与顶栏白色元素可读
             LinearGradient(
                 stops: [
                     .init(color: .black.opacity(0.5), location: 0),
@@ -147,16 +159,20 @@ struct KugouPlaybackView: View {
             )
             .ignoresSafeArea()
 
-            // 沉浸式亮纱：上半屏露出封面，中下部渐亮承载信息与控件
+            // 沉浸式亮纱：上半屏露出封面，中下部渐亮承载信息与控件；颜色跟随背景图主色
+            let tint = backdropLoader.dominantColor ?? .black
+            let tintR = CGFloat(tint.red); let tintG = CGFloat(tint.green); let tintB = CGFloat(tint.blue)
+            let tintLight = Color(red: min(1, tintR + 0.15), green: min(1, tintG + 0.15), blue: min(1, tintB + 0.15))
+            let tintDark = Color(red: max(0, tintR - 0.15), green: max(0, tintG - 0.15), blue: max(0, tintB - 0.15))
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0.20),
-                    .init(color: veilColor.opacity(0.34), location: 0.28),
-                    .init(color: veilColor.opacity(0.62), location: 0.38),
-                    .init(color: veilColor.opacity(0.86), location: 0.48),
-                    .init(color: veilColor.opacity(0.92), location: 0.60),
-                    .init(color: veilColor.opacity(0.945), location: 0.78),
-                    .init(color: veilColor.opacity(0.96), location: 1.0)
+                    .init(color: tintLight.opacity(0.30), location: 0.28),
+                    .init(color: tintLight.opacity(0.55), location: 0.38),
+                    .init(color: tint.opacity(0.80), location: 0.48),
+                    .init(color: tintDark.opacity(0.85), location: 0.60),
+                    .init(color: tintDark.opacity(0.92), location: 0.78),
+                    .init(color: tintDark.opacity(0.95), location: 1.0)
                 ],
                 startPoint: .top,
                 endPoint: .bottom
@@ -223,68 +239,55 @@ struct KugouPlaybackView: View {
     // MARK: - 中部页面
 
     private func coverPage(size: CGSize) -> some View {
-        let artSize = min(size.width - 96, min(size.height * 0.40, 340))
-        return VStack(spacing: 16) {
-            Spacer(minLength: 10)
+        // 背景图缩小显示中间：去除 frosted 头像框，用直出背景图
+        GeometryReader { geo in
+            let imgSize = min(geo.width * 0.58, geo.height * 0.50)
+            let imgX = (geo.width - imgSize) / 2
+            let imgY = geo.size.height * 0.14
 
-            CoverImage(
-                url: coverURL,
-                song: song,
-                size: artSize,
-                cornerRadius: 18,
-                emptyHint: player.isBuffering ? "等待开始播放…" : nil,
-                playsCoverVideoAudio: true
-            )
-            .shadow(color: .black.opacity(0.5), radius: 34, y: 16)
-            .scaleEffect(player.isPlaying ? 1 : 0.965)
-            .animation(.spring(response: 0.36, dampingFraction: 0.84), value: player.isPlaying)
-
-            if !lyrics.isEmpty {
-                Button {
-                    BeansHaptics.tap()
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        pageIndex = Page.lyrics.rawValue
-                    }
-                } label: {
-                    Text(currentLyricText)
-                        .font(BeansFont.appFont(14, .medium))
-                        .foregroundStyle(inkPrimary.opacity(0.85))
-                        .lineLimit(1)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 9)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .overlay(Capsule().strokeBorder(inkPrimary.opacity(0.15), lineWidth: 1))
-                }
-                .buttonStyle(GlassPressButtonStyle())
+            if let image = backdropLoader.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: imgSize, height: imgSize)
+                    .position(x: imgX + imgSize / 2, y: imgY + imgSize / 2)
+                    .shadow(color: .black.opacity(0.3), radius: 12, y: 6)
+            } else {
+                CoverImage(
+                    url: coverURL,
+                    song: song,
+                    size: imgSize * 0.6,
+                    cornerRadius: 18,
+                    emptyHint: player.isBuffering ? "等待开始播放…" : nil,
+                    playsCoverVideoAudio: true
+                )
+                .shadow(color: .black.opacity(0.5), radius: 20, y: 10)
             }
-
-            Spacer(minLength: 4)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // 歌词整体压到中下部：当前行落在亮纱上，深色墨水可读
+    // 歌词页：顶部占位把歌词压到中下部，当前行落在亮纱上
     private var lyricsPage: some View {
         GeometryReader { geo in
             VStack(spacing: 0) {
                 Color.clear.frame(height: geo.size.height * 0.26)
-
                 Group {
                     if lyrics.isEmpty {
                         VStack(spacing: 12) {
                             Image(systemName: "music.note")
                                 .font(.system(size: 34, weight: .light))
-                                .foregroundStyle(inkFaint)
+                                .foregroundStyle(adaptiveInkFaint)
                             Text("暂无歌词")
                                 .font(BeansFont.appFont(15, .medium))
-                                .foregroundStyle(inkSecondary)
+                                .foregroundStyle(adaptiveInkSecondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         AppleMusicLyricsSection(
                             lyrics: lyrics,
-                            primary: inkPrimary,
-                            secondary: inkSecondary,
+                            primary: adaptiveInkPrimary,
+                            secondary: adaptiveInkSecondary,
                             lyricOffset: CGFloat(lyricOffset)
                         ) { line in
                             BeansHaptics.tap()
@@ -300,16 +303,16 @@ struct KugouPlaybackView: View {
         }
     }
 
-    // 队列页局部亮纱：从封面过渡到近实色的浅色列表背景
+    // 队列页局部亮纱：从封面过渡到近实色的浅色列表背景，颜色跟随背景图
     private var queuePage: some View {
         GeometryReader { geo in
             ZStack(alignment: .top) {
                 LinearGradient(
                     stops: [
                         .init(color: .clear, location: 0),
-                        .init(color: veilColor.opacity(0.40), location: 0.10),
-                        .init(color: veilColor.opacity(0.86), location: 0.22),
-                        .init(color: veilColor.opacity(0.94), location: 1.0)
+                        .init(color: tintColor.opacity(0.40), location: 0.10),
+                        .init(color: tintColor.opacity(0.86), location: 0.22),
+                        .init(color: tintColor.opacity(0.94), location: 1.0)
                     ],
                     startPoint: .top,
                     endPoint: .bottom
@@ -321,7 +324,7 @@ struct KugouPlaybackView: View {
                     HStack {
                         Text("播放队列")
                             .font(BeansFont.appFont(18, .bold))
-                            .foregroundStyle(inkPrimary)
+                            .foregroundStyle(adaptiveInkPrimary)
                         Spacer()
                         Menu {
                             Button("清空队列", role: .destructive) {
@@ -334,7 +337,7 @@ struct KugouPlaybackView: View {
                         } label: {
                             Image(systemName: "ellipsis")
                                 .font(.system(size: 17, weight: .semibold))
-                                .foregroundStyle(inkPrimary.opacity(0.85))
+                                .foregroundStyle(adaptiveInkPrimary.opacity(0.85))
                                 .frame(width: 38, height: 30)
                         }
                     }
@@ -348,14 +351,14 @@ struct KugouPlaybackView: View {
         }
     }
 
-    // MARK: - 底部信息与控制（全部墨水色）
+        // MARK: - 底部信息与控制（全部墨水色）
 
     private var bottomPanel: some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(song?.name ?? "未在播放")
                     .font(BeansFont.appFont(26, .bold))
-                    .foregroundStyle(inkPrimary)
+                    .foregroundStyle(adaptiveInkPrimary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
                 if showSongVIPBadge, song?.isVIP == true {
@@ -372,7 +375,7 @@ struct KugouPlaybackView: View {
             HStack(spacing: 8) {
                 Text(song?.artists ?? "")
                     .font(BeansFont.appFont(14, .medium))
-                    .foregroundStyle(inkSecondary)
+                    .foregroundStyle(adaptiveInkSecondary)
                     .lineLimit(1)
                     .contentShape(Rectangle())
                     .onTapGesture {
@@ -414,18 +417,6 @@ struct KugouPlaybackView: View {
             .padding(.top, 14)
             .padding(.bottom, 4)
 
-            HStack(spacing: 10) {
-                Text(beansTimeString(clock.progress))
-                    .frame(minWidth: 34, alignment: .leading)
-                SeekBar(accent: inkPrimary, track: inkPrimary.opacity(0.24))
-                    .frame(height: 22)
-                Text(beansTimeString(clock.duration))
-                    .frame(minWidth: 34, alignment: .trailing)
-            }
-            .font(BeansFont.appFont(11, .regular, .monospaced))
-            .foregroundStyle(inkSecondary)
-            .padding(.top, 8)
-
             HStack(spacing: 0) {
                 modeButton
                 Spacer(minLength: 0)
@@ -437,12 +428,25 @@ struct KugouPlaybackView: View {
                 Spacer(minLength: 0)
                 queueButton
             }
-            .padding(.top, 12)
-            .padding(.bottom, 4)
+            .padding(.top, 4)
+            .padding(.bottom, 2)
+
+            // 图3 式：进度条在顶，时间在下方
+            HStack {
+                Text(beansTimeString(clock.progress))
+                    .font(BeansFont.appFont(10, .regular, .monospaced))
+                    .frame(minWidth: 30, alignment: .leading)
+                Spacer()
+                Text(beansTimeString(clock.duration))
+                    .font(BeansFont.appFont(10, .regular, .monospaced))
+                    .frame(minWidth: 30, alignment: .trailing)
+            }
+            .foregroundStyle(adaptiveInkSecondary)
+            .padding(.top, 2)
         }
         .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .padding(.bottom, 6)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     // MARK: - 底部组件
@@ -454,11 +458,11 @@ struct KugouPlaybackView: View {
         } label: {
             Text(title)
                 .font(BeansFont.appFont(11, .medium))
-                .foregroundStyle(inkPrimary.opacity(0.8))
+                .foregroundStyle(adaptiveInkPrimary.opacity(0.8))
                 .lineLimit(1)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 4)
-                .overlay(Capsule().strokeBorder(inkPrimary.opacity(0.32), lineWidth: 1))
+                .overlay(Capsule().strokeBorder(adaptiveInkPrimary.opacity(0.32), lineWidth: 1))
         }
         .buttonStyle(GlassPressButtonStyle())
     }
@@ -468,7 +472,7 @@ struct KugouPlaybackView: View {
             BeansHaptics.tap()
             onFavorite()
         } label: {
-            FavoriteHeartView(mark: favoriteMark, size: 22, inactiveColor: inkPrimary.opacity(0.85))
+            FavoriteHeartView(mark: favoriteMark, size: 22, inactiveColor: adaptiveInkPrimary.opacity(0.85))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -482,7 +486,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: name)
                 .font(.system(size: 21, weight: .regular))
-                .foregroundStyle(active ? Color.beansAmber : inkPrimary.opacity(0.86))
+                .foregroundStyle(active ? Color.beansAmber : adaptiveInkPrimary.opacity(0.86))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -498,7 +502,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 21, weight: .semibold))
-                .foregroundStyle(inkPrimary.opacity(0.86))
+                .foregroundStyle(adaptiveInkPrimary.opacity(0.86))
                 .frame(maxWidth: .infinity)
                 .frame(height: 40)
         }
@@ -509,16 +513,10 @@ struct KugouPlaybackView: View {
             BeansHaptics.tap()
             player.togglePlayMode()
         } label: {
-            VStack(spacing: 3) {
-                Image(systemName: player.playMode.icon)
-                    .font(.system(size: 19, weight: .medium))
-                Text(player.playMode.title)
-                    .font(BeansFont.appFont(9))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .foregroundStyle(inkPrimary.opacity(0.82))
-            .frame(width: 56, height: 44)
+            Image(systemName: player.playMode.icon)
+                .font(.system(size: 20, weight: .medium))
+                .foregroundStyle(adaptiveInkPrimary.opacity(0.9))
+                .frame(width: 44, height: 44)
         }
         .buttonStyle(GlassPressButtonStyle())
     }
@@ -530,7 +528,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: icon)
                 .font(.system(size: size, weight: .medium))
-                .foregroundStyle(inkPrimary)
+                .foregroundStyle(adaptiveInkPrimary)
                 .frame(width: 54, height: 54)
         }
         .buttonStyle(GlassPressButtonStyle())
@@ -549,10 +547,10 @@ struct KugouPlaybackView: View {
                 Circle()
                     .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color.white.opacity(0.5))
                 Circle()
-                    .strokeBorder(inkPrimary.opacity(colorScheme == .dark ? 0.45 : 0.18), lineWidth: 1)
+                    .strokeBorder(adaptiveInkPrimary.opacity(colorScheme == .dark ? 0.45 : 0.18), lineWidth: 1)
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 25, weight: .semibold))
-                    .foregroundStyle(inkPrimary)
+                    .foregroundStyle(adaptiveInkPrimary)
                     .offset(x: player.isPlaying ? 0 : 1.5)
             }
             .frame(width: 66, height: 66)
@@ -574,7 +572,7 @@ struct KugouPlaybackView: View {
         } label: {
             Image(systemName: "list.bullet")
                 .font(.system(size: 20, weight: .medium))
-                .foregroundStyle(pageIndex == Page.queue.rawValue ? Color.beansAmber : inkPrimary.opacity(0.85))
+                .foregroundStyle(pageIndex == Page.queue.rawValue ? Color.beansAmber : adaptiveInkPrimary.opacity(0.85))
                 .frame(width: 56, height: 44)
         }
         .buttonStyle(GlassPressButtonStyle())
@@ -612,10 +610,12 @@ struct KugouPlaybackView: View {
 
 private final class KugouBackdropLoader: ObservableObject {
     @Published private(set) var image: UIImage?
+    @Published private(set) var dominantColor: UIColor?
 
     private var task: Task<Void, Never>?
     private var currentURL: URL?
     private static let cache = NSCache<NSURL, UIImage>()
+    private static let colorCache = NSCache<NSURL, UIColor>()
 
     func load(url: URL?) {
         let resolved = CustomSongCoverStore.shared.resolvedURL(for: url)
@@ -623,12 +623,15 @@ private final class KugouBackdropLoader: ObservableObject {
             task?.cancel()
             currentURL = nil
             if image != nil { image = nil }
+            if dominantColor != nil { dominantColor = nil }
             return
         }
         guard resolved != currentURL else { return }
         currentURL = resolved
         if let cached = Self.cache.object(forKey: resolved as NSURL) {
             image = cached
+            dominantColor = Self.colorCache.object(forKey: resolved as NSURL)
+                ?? Self.computeDominantColor(from: cached)
             return
         }
         task?.cancel()
@@ -637,7 +640,20 @@ private final class KugouBackdropLoader: ObservableObject {
             guard !Task.isCancelled, let loaded = UIImage(data: data) else { return }
             Self.cache.setObject(loaded, forKey: resolved as NSURL)
             self.image = loaded
+            let color = Self.computeDominantColor(from: loaded)
+            Self.colorCache.setObject(color, forKey: resolved as NSURL)
+            self.dominantColor = color
         }
+    }
+
+    private static func computeDominantColor(from image: UIImage) -> UIColor {
+        guard let cg = image.cgImage else { return .black }
+        let size = CGSize(width: 1, height: 1)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        var pixel: [UInt8] = [0, 0, 0, 0]
+        guard let ctx = CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return .black }
+        ctx.draw(image.cgImage!, in: CGRect(origin: .zero, size: size))
+        return UIColor(red: CGFloat(pixel[0]) / 255.0, green: CGFloat(pixel[1]) / 255.0, blue: CGFloat(pixel[2]) / 255.0, alpha: 1.0)
     }
 
     private static func fetchData(_ url: URL) async -> Data? {

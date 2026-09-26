@@ -18,16 +18,17 @@ jobs:
   build-ipa:
     runs-on: macos-26
     steps:
-      - name: Fresh clone
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Force refresh KugouPlaybackView from HEAD
         run: |
-          set -ex
-          rm -rf /Users/runner/work/-11/-11
-          mkdir -p /Users/runner/work/-11
-          git clone --depth 1 https://github.com/zhangwenwei44/-11.git /Users/runner/work/-11/-11
-          echo "Checking file content:"
-          head -5 /Users/runner/work/-11/-11/Beans/KugouPlaybackView.swift
-          echo "All files:"
-          ls /Users/runner/work/-11/-11/
+          cd /Users/runner/work/-11/-11
+          git checkout HEAD -- Beans/KugouPlaybackView.swift
+          head -5 Beans/KugouPlaybackView.swift
 
       - name: Install XcodeGen
         run: HOMEBREW_NO_REQUIRE_TAP_TRUST=1 brew install xcodegen

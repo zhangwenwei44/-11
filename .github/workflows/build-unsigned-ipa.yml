@@ -20,11 +20,13 @@ jobs:
     steps:
       - name: Fresh clone
         run: |
-          set -e
+          set -ex
           rm -rf /Users/runner/work/-11/-11
           mkdir -p /Users/runner/work/-11
           git clone --depth 1 https://github.com/zhangwenwei44/-11.git /Users/runner/work/-11/-11
-          echo "Cloned files:"
+          echo "Checking file content:"
+          head -5 /Users/runner/work/-11/-11/Beans/KugouPlaybackView.swift
+          echo "All files:"
           ls /Users/runner/work/-11/-11/
 
       - name: Install XcodeGen

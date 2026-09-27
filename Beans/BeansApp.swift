@@ -18,6 +18,8 @@ struct BeansApp: App {
         UINavigationBar.appearance().tintColor = .label
         // 尽早安装崩溃捕获，异常/致命信号写入 Documents/BeansLogs 供导出分析。
         BeansCrashHandler.shared.install()
+        // 主线程卡顿（不崩溃但界面无响应）此前不留任何痕迹，单独用看门狗记录。
+        BeansHangWatchdog.shared.install()
         // 主页暂停只应在设置页打开期间生效，避免异常退出后把暂停状态永久写入本地。
         UserDefaults.standard.set(false, forKey: "beans.pauseHomeRendering")
         // 新安装默认开启高刷新率；老用户保留自己手动关闭的选择。

@@ -2257,6 +2257,13 @@ final class PlayerManager: NSObject, ObservableObject {
         playCounts = saved
     }
 
+    /// 播放态持久化是「整队列」写入：300 首的歌单每次都要把全部 Song 编码成 JSON。
+    /// 该方法由主队列上的周期观察者每 ~2s 调用一次，直接在主线程编码会持续掉帧，
+    /// 因此编码与写入都挪到串行后台队列，并用序号丢弃过期的中间结果。
+    private let persistQueue = DispatchQueue(label: "com.beans.playback.persist", qos: .utility)
+    private let persistSequenceLock = NSLock()
+    private var persistSequence = 0
+
     private func savePersistedPlaybackState() {
         guard !queue.isEmpty, queue.indices.contains(currentIndex) else {
             defaults.removeObject(forKey: playbackStateKey)
@@ -2269,9 +2276,23 @@ final class PlayerManager: NSObject, ObservableObject {
             duration: duration,
             savedAt: Date()
         )
-        if let data = try? JSONEncoder().encode(state) {
-            defaults.set(data, forKey: playbackStateKey)
+        persistSequenceLock.lock()
+        persistSequence += 1
+        let sequence = persistSequence
+        persistSequenceLock.unlock()
+        let key = playbackStateKey
+        persistQueue.async { [weak self] in
+            guard let data = try? JSONEncoder().encode(state) else { return }
+            // 只允许最新一次请求落盘，避免快速拖动进度时排队的旧快照覆盖新的。
+            guard let self, self.isLatestPersistSequence(sequence) else { return }
+            UserDefaults.standard.set(data, forKey: key)
         }
+    }
+
+    private func isLatestPersistSequence(_ sequence: Int) -> Bool {
+        persistSequenceLock.lock()
+        defer { persistSequenceLock.unlock() }
+        return sequence == persistSequence
     }
 
     private func restorePersistedPlaybackState() {

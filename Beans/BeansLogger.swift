@@ -41,6 +41,11 @@ final class BeansLogger: ObservableObject {
     private let maxLogFileBytes = 10 * 1024 * 1024
     private let lock = NSLock()
     private var recentEntries: [BeansLogEntry] = []
+    /// 落盘串行队列。日志可能在一秒内产生数十条（userPlaylists 每页一条），
+    /// 逐行做 stat/open/seek/write/close 会把调用线程拖住，所以整体挪到后台串行执行。
+    private let fileQueue = DispatchQueue(label: "com.beans.logger.file", qos: .utility)
+    /// 内存队列，避免在锁内做逐条 dispatch 带来的额外分配。
+    private var pendingEntries: [BeansLogEntry] = []
 
     private static let lineFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -73,12 +78,25 @@ final class BeansLogger: ObservableObject {
         if recentEntries.count > maxEntries {
             recentEntries.removeFirst(recentEntries.count - maxEntries)
         }
-        let snapshot = recentEntries
+        pendingEntries.append(entry)
+        let batch = pendingEntries
+        pendingEntries.removeAll(keepingCapacity: true)
         lock.unlock()
+        // 批量合并后再更新 @Published：整条日志链路上只做一次主线程派发与一次数组追加，
+        // 避免每行都把最多 5000 条复制到主线程。
         DispatchQueue.main.async { [weak self] in
-            self?.entries = snapshot
+            guard let self else { return }
+            self.entries.append(contentsOf: batch)
+            if self.entries.count > self.maxEntries {
+                self.entries.removeFirst(self.entries.count - self.maxEntries)
+            }
         }
-        write(entry.line)
+        fileQueue.async { [weak self] in
+            guard let self else { return }
+            for e in batch {
+                self.write(e.line)
+            }
+        }
     }
 
     /// 全部日志文本（按时间正序）
@@ -97,25 +115,57 @@ final class BeansLogger: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             self?.entries = []
         }
-        try? FileManager.default.removeItem(at: logDirectory)
+        fileQueue.async { [weak self] in
+            guard let self else { return }
+            let dir = self.logDirectory
+            self.lock.lock()
+            // 目录已被删除，下次写入前必须重新解析。
+            self.cachedLogDirectory = nil
+            self.cachedFileURL = nil
+            self.cachedFileStamp = nil
+            self.lock.unlock()
+            try? FileManager.default.removeItem(at: dir)
+        }
         log("日志已清空", level: .info)
     }
 
     // MARK: - 文件持久化
 
+    // 仅在 fileQueue 与导出路径访问，访问时用 lock 保护（lock 不可重入，勿嵌套调用）。
+    private var cachedLogDirectory: URL?
+    private var cachedFileURL: URL?
+    private var cachedFileStamp: String?
+
     private var logDirectory: URL {
+        lock.lock()
+        defer { lock.unlock() }
+        return resolvedLogDirectoryLocked()
+    }
+
+    private func resolvedLogDirectoryLocked() -> URL {
+        if let cachedLogDirectory { return cachedLogDirectory }
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("BeansLogs", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        cachedLogDirectory = dir
         return dir
     }
 
     private var currentFileURL: URL {
-        logDirectory.appendingPathComponent("beans-\(Self.fileStampFormatter.string(from: Date())).log")
+        let stamp = Self.fileStampFormatter.string(from: Date())
+        lock.lock()
+        defer { lock.unlock() }
+        if let cachedFileURL, cachedFileStamp == stamp { return cachedFileURL }
+        let url = resolvedLogDirectoryLocked().appendingPathComponent("beans-\(stamp).log")
+        cachedFileStamp = stamp
+        cachedFileURL = url
+        return url
     }
 
     /// 导出日志文件（不存在则先生成一份完整日志）
     func exportLogURL() -> URL {
+        // 落盘已改为异步，先等队列排空，保证导出文件包含最后几条日志。
+        fileQueue.sync {}
         let url = currentFileURL
         if !FileManager.default.fileExists(atPath: url.path) {
             try? fullText.write(to: url, atomically: true, encoding: .utf8)
@@ -123,9 +173,11 @@ final class BeansLogger: ObservableObject {
         return url
     }
 
-    /// 导出项：当日运行日志 + 全部崩溃日志
+    /// 导出项：当日运行日志 + 全部崩溃日志 + 全部卡顿报告
     func exportItems() -> [URL] {
-        [exportLogURL()] + BeansCrashHandler.shared.crashLogURLs()
+        [exportLogURL()]
+            + BeansCrashHandler.shared.crashLogURLs()
+            + BeansHangWatchdog.shared.hangLogURLs()
     }
 
     private func write(_ line: String) {

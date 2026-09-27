@@ -3,6 +3,29 @@ import Compression
 import Security
 import UIKit
 
+/// 会员状态探测的门控。把「300s 冷却」和「同一时刻只跑一个探测」收敛到 actor 里，
+/// 让并发调用者中只有首个拿到执行权，其余立即返回而不是重复发请求。
+private actor MembershipProbeGate {
+    private var lastProbeAt: Date?
+    private var inFlight = false
+    private let cooldown: TimeInterval = 300
+
+    /// 返回 true 表示调用者应当执行本次探测。
+    func claim(force: Bool) -> Bool {
+        if inFlight { return false }
+        if !force, let lastProbeAt, Date().timeIntervalSince(lastProbeAt) < cooldown {
+            return false
+        }
+        lastProbeAt = Date()
+        inFlight = true
+        return true
+    }
+
+    func release() {
+        inFlight = false
+    }
+}
+
 final class KugouMusicAPI {
     static let shared = KugouMusicAPI()
 
@@ -30,7 +53,7 @@ final class KugouMusicAPI {
     private let rsaPublicKeyBase64 = "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDECi0Np2UR87scwrvTr72L6oO01rBbbBPriSDFPxr3Z5syug0O24QyQO8bg27+0+4kBzTBTBOZ/WWU0WryL1JSXRTXLgFVxtzIY41Pe7lPOgsfTCn5kZcvKhYKJesKnnJDNr5/abvTGf+rHG3YRwsCHcQ08/q6ifSioBszvb3QiwIDAQAB"
 
     private let session: URLSession
-    private var lastMembershipProbeAt: Date?
+    private let membershipGate = MembershipProbeGate()
 
     private init() {
         let config = URLSessionConfiguration.default
@@ -149,9 +172,11 @@ final class KugouMusicAPI {
                 return playlist
             }
             result.append(contentsOf: pageItems)
-            BeansLogger.shared.log("酷狗歌单同步分页：page=\(page) raw=\(raw.count) new=\(pageItems.count) total=\(result.count)", level: .debug)
             if raw.count < pageSize || pageItems.isEmpty { break }
         }
+        // 原本逐页打一行（单次调用最多 50 行），突发同步时会把日志本身变成卡顿来源。
+        // 改为循环结束后只记一次汇总，逐页细节由 info 级的总数体现。
+        BeansLogger.shared.log("酷狗歌单同步完成：共 \(result.count) 个", level: .debug)
         return result
     }
 
@@ -1663,10 +1688,13 @@ final class KugouMusicAPI {
     private func refreshMembershipStatusIfNeeded(force: Bool = false) async {
         let auth = KugouMusicAuth.shared
         guard auth.isLoggedIn, !auth.hasMembership else { return }
-        if !force, let lastMembershipProbeAt, Date().timeIntervalSince(lastMembershipProbeAt) < 300 {
-            return
-        }
-        lastMembershipProbeAt = Date()
+        // 门控是 actor 隔离的：此前的 300s TTL 判断是非原子的，且读写之间隔着 await，
+        // 导致 LibraryView / RootView / PlayerView 等处并发的 userPlaylists() 全部穿过检查，
+        // 同一秒内重复打出多条「会员状态探测」与「歌单同步分页」。
+        // 这里只让首个调用者真正探测，其余并发调用直接跳过而不是排队等待，
+        // 避免把播放取链路的 songURL() 堵在别人的歌单同步后面。
+        guard await membershipGate.claim(force: force) else { return }
+        defer { Task { await membershipGate.release() } }
         for listID in ["3", "2"] {
             do {
                 let body: [String: Any] = [
